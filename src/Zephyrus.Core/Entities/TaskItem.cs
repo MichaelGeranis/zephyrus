@@ -4,14 +4,14 @@ namespace Zephyrus.Core.Entities;
 
 /// <summary>
 /// An atomic unit of work assigned to the Code Agent.
-/// Each TaskItem maps to a GitHub Issue and eventually a PR.
+/// Each TaskItem maps to an issue in the code host and eventually a pull request.
 /// Named TaskItem to avoid collision with System.Threading.Tasks.Task.
 /// </summary>
 public class TaskItem
 {
     public Guid Id { get; private set; }
     public Guid FeatureId { get; private set; }
-    public int? GitHubIssueId { get; private set; }
+    public int? ExternalIssueId { get; private set; }
     public string Title { get; private set; } = string.Empty;
     public TaskItemStatus Status { get; private set; }
     public int? PrId { get; private set; }
@@ -34,11 +34,11 @@ public class TaskItem
     }
 
     /// <summary>
-    /// Links this task to a GitHub Issue.
+    /// Links this task to an issue in the code host.
     /// </summary>
-    public void SetGitHubIssueId(int issueId)
+    public void SetExternalIssueId(int issueId)
     {
-        GitHubIssueId = issueId;
+        ExternalIssueId = issueId;
     }
 
     /// <summary>

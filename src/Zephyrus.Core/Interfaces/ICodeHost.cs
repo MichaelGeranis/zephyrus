@@ -1,7 +1,7 @@
 namespace Zephyrus.Core.Interfaces;
 
 /// <summary>
-/// Abstraction over GitHub operations. Implemented in Infrastructure via Octokit.net.
+/// Abstraction over code host operations (GitHub, GitLab, Bitbucket, etc.).
 /// </summary>
 public interface ICodeHost
 {

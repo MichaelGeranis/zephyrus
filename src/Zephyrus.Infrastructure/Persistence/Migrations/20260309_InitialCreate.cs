@@ -20,7 +20,7 @@ public partial class InitialCreate : Migration
                 name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                 description = table.Column<string>(type: "text", nullable: false),
                 config = table.Column<string>(type: "jsonb", nullable: false),
-                github_repo = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                repository_slug = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
                 created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
             },
             constraints: table =>
@@ -56,7 +56,7 @@ public partial class InitialCreate : Migration
                 id = table.Column<Guid>(type: "uuid", nullable: false),
                 feature_id = table.Column<Guid>(type: "uuid", nullable: false),
                 type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                github_path = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false),
+                repository_path = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false),
                 approved_by = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                 approved_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
             },
@@ -77,7 +77,7 @@ public partial class InitialCreate : Migration
             {
                 id = table.Column<Guid>(type: "uuid", nullable: false),
                 feature_id = table.Column<Guid>(type: "uuid", nullable: false),
-                github_issue_id = table.Column<int>(type: "integer", nullable: true),
+                external_issue_id = table.Column<int>(type: "integer", nullable: true),
                 title = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
                 status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                 pr_id = table.Column<int>(type: "integer", nullable: true),

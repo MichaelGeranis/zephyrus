@@ -28,8 +28,8 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnType("jsonb")
             .IsRequired();
 
-        builder.Property(p => p.GitHubRepo)
-            .HasColumnName("github_repo")
+        builder.Property(p => p.RepositorySlug)
+            .HasColumnName("repository_slug")
             .HasMaxLength(512)
             .IsRequired();
 

@@ -4,7 +4,7 @@ namespace Zephyrus.Core.Entities;
 
 /// <summary>
 /// An output produced by an agent (PRD, ADR, PR, tests).
-/// Content lives in GitHub — only the path is stored here.
+/// Content lives in the code host — only the path is stored here.
 /// </summary>
 public class Artifact
 {
@@ -13,9 +13,9 @@ public class Artifact
     public ArtifactType Type { get; private set; }
 
     /// <summary>
-    /// Path to the artifact in the GitHub repository.
+    /// Path to the artifact in the source code repository.
     /// </summary>
-    public string GitHubPath { get; private set; } = string.Empty;
+    public string RepositoryPath { get; private set; } = string.Empty;
 
     public string? ApprovedBy { get; private set; }
     public DateTime? ApprovedAt { get; private set; }
@@ -24,14 +24,14 @@ public class Artifact
 
     private Artifact() { }
 
-    public static Artifact Create(Guid featureId, ArtifactType type, string gitHubPath)
+    public static Artifact Create(Guid featureId, ArtifactType type, string repositoryPath)
     {
         return new Artifact
         {
             Id = Guid.NewGuid(),
             FeatureId = featureId,
             Type = type,
-            GitHubPath = gitHubPath
+            RepositoryPath = repositoryPath
         };
     }
 

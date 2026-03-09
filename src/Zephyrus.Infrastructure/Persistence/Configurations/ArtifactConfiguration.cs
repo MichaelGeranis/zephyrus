@@ -25,8 +25,8 @@ public class ArtifactConfiguration : IEntityTypeConfiguration<Artifact>
             .HasMaxLength(32)
             .IsRequired();
 
-        builder.Property(a => a.GitHubPath)
-            .HasColumnName("github_path")
+        builder.Property(a => a.RepositoryPath)
+            .HasColumnName("repository_path")
             .HasMaxLength(1024)
             .IsRequired();
 

@@ -19,8 +19,8 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasColumnName("feature_id")
             .IsRequired();
 
-        builder.Property(t => t.GitHubIssueId)
-            .HasColumnName("github_issue_id");
+        builder.Property(t => t.ExternalIssueId)
+            .HasColumnName("external_issue_id");
 
         builder.Property(t => t.Title)
             .HasColumnName("title")

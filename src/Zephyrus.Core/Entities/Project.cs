@@ -2,7 +2,7 @@ namespace Zephyrus.Core.Entities;
 
 /// <summary>
 /// A software project managed by Zephyrus. Contains the Project Constitution
-/// and links to the GitHub repository.
+/// and links to the source code repository.
 /// </summary>
 public class Project
 {
@@ -16,9 +16,9 @@ public class Project
     public string Config { get; private set; } = string.Empty;
 
     /// <summary>
-    /// GitHub repository in "owner/repo" format.
+    /// Repository identifier in "owner/repo" format (e.g. GitHub, GitLab, Bitbucket).
     /// </summary>
-    public string GitHubRepo { get; private set; } = string.Empty;
+    public string RepositorySlug { get; private set; } = string.Empty;
 
     public DateTime CreatedAt { get; private set; }
 
@@ -27,7 +27,7 @@ public class Project
 
     private Project() { }
 
-    public static Project Create(string name, string description, string config, string gitHubRepo)
+    public static Project Create(string name, string description, string config, string repositorySlug)
     {
         return new Project
         {
@@ -35,7 +35,7 @@ public class Project
             Name = name,
             Description = description,
             Config = config,
-            GitHubRepo = gitHubRepo,
+            RepositorySlug = repositorySlug,
             CreatedAt = DateTime.UtcNow
         };
     }

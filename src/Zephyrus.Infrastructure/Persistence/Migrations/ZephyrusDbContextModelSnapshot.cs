@@ -26,7 +26,7 @@ partial class ZephyrusDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("Name").IsRequired().HasMaxLength(256).HasColumnType("character varying(256)").HasColumnName("name");
             b.Property<string>("Description").IsRequired().HasColumnType("text").HasColumnName("description");
             b.Property<string>("Config").IsRequired().HasColumnType("jsonb").HasColumnName("config");
-            b.Property<string>("GitHubRepo").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("github_repo");
+            b.Property<string>("RepositorySlug").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("repository_slug");
             b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("created_at");
             b.HasKey("Id");
             b.ToTable("projects", (string)null);
@@ -49,7 +49,7 @@ partial class ZephyrusDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
             b.Property<Guid>("FeatureId").HasColumnType("uuid").HasColumnName("feature_id");
             b.Property<string>("Type").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("type");
-            b.Property<string>("GitHubPath").IsRequired().HasMaxLength(1024).HasColumnType("character varying(1024)").HasColumnName("github_path");
+            b.Property<string>("RepositoryPath").IsRequired().HasMaxLength(1024).HasColumnType("character varying(1024)").HasColumnName("repository_path");
             b.Property<string>("ApprovedBy").HasMaxLength(256).HasColumnType("character varying(256)").HasColumnName("approved_by");
             b.Property<DateTime?>("ApprovedAt").HasColumnType("timestamp with time zone").HasColumnName("approved_at");
             b.HasKey("Id");
@@ -61,7 +61,7 @@ partial class ZephyrusDbContextModelSnapshot : ModelSnapshot
         {
             b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
             b.Property<Guid>("FeatureId").HasColumnType("uuid").HasColumnName("feature_id");
-            b.Property<int?>("GitHubIssueId").HasColumnType("integer").HasColumnName("github_issue_id");
+            b.Property<int?>("ExternalIssueId").HasColumnType("integer").HasColumnName("external_issue_id");
             b.Property<string>("Title").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("title");
             b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("status");
             b.Property<int?>("PrId").HasColumnType("integer").HasColumnName("pr_id");
