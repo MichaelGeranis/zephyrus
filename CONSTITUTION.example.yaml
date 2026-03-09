@@ -1,0 +1,58 @@
+# Zephyrus — Project Constitution Example
+# Copy this file to your project root as CONSTITUTION.yaml and fill it in.
+# Every Zephyrus agent reads this file before acting.
+
+project:
+  name: "my-app"
+  description: "Brief description of what this project does and who it is for"
+
+stack:
+  frontend: "Next.js + TypeScript"
+  backend: "ASP.NET Core + C#"
+  database: "PostgreSQL"
+  orm: "Entity Framework Core"
+  # Other examples:
+  # frontend: "React + Vite + TypeScript"
+  # backend: "FastAPI + Python"
+  # backend: "Node.js + Express + TypeScript"
+  # database: "MySQL"
+  # database: "MongoDB"
+
+conventions:
+  linting: "ESLint + Prettier (frontend), dotnet format (backend)"
+  testing: "Jest + React Testing Library (frontend), xUnit (backend)"
+  branch_strategy: "feature branches → main"
+  commit_style: "conventional commits (feat:, fix:, chore:, docs:)"
+  pr_template: true
+  code_style:
+    - "Repository pattern for data access"
+    - "CQRS for API command/query handlers"
+    - "Async/await throughout — no blocking calls"
+    - "Explicit error handling — no silent failures"
+
+deployment:
+  target: "Railway"
+  # Other examples: "Vercel", "AWS ECS", "Azure App Service", "Fly.io"
+  trigger: "merge to main"
+  environments:
+    - name: "production"
+      branch: "main"
+  environment_variables:
+    # List all required env vars so the DevOps Agent can generate correct CI/CD
+    - DATABASE_URL
+    - CLAUDE_API_KEY
+    - GITHUB_TOKEN
+    - JWT_SECRET
+
+architecture:
+  api_style: "REST + JSON"
+  auth: "JWT"
+  patterns:
+    - "Stateless agents — all state lives in DB and GitHub, never in agent memory"
+    - "One feature = one pipeline run — no shared mutable state between features"
+    - "GitHub is source of truth for code — DB tracks pipeline state only"
+  out_of_scope:
+    # Tell agents what NOT to build — prevents over-engineering
+    - "Do not add caching unless explicitly requested"
+    - "Do not add rate limiting in MVP"
+    - "Do not add multi-tenancy in MVP"
