@@ -98,6 +98,23 @@ public sealed class GitHubCodeHost : ICodeHost
         return issue.Number;
     }
 
+    /// <inheritdoc />
+    public async Task<string?> GetFileContentAsync(
+        string repo, string branch, string path, CancellationToken ct = default)
+    {
+        var (owner, repoName) = ParseRepo(repo);
+
+        try
+        {
+            var contents = await _client.Repository.Content.GetAllContentsByRef(owner, repoName, path, branch);
+            return contents.Count > 0 ? contents[0].Content : null;
+        }
+        catch (NotFoundException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Splits an "owner/repo" string into its two components.
     /// </summary>

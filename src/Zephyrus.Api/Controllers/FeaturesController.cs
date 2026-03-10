@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Zephyrus.Application.Managers;
 using Zephyrus.Application.UseCases;
 using Zephyrus.Core.Entities;
+using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.Api.Controllers;
 
@@ -39,6 +40,50 @@ public class FeaturesController : ControllerBase
     {
         var features = await _featureManager.GetByProjectAsync(projectId, ct);
         return Ok(features.Select(f => new FeatureResponse(f)));
+    }
+
+    [HttpGet("{id:guid}/artifacts")]
+    public async Task<IActionResult> GetArtifacts(
+        Guid id,
+        [FromServices] IArtifactRepository artifactRepository,
+        CancellationToken ct)
+    {
+        var feature = await _featureManager.GetByIdAsync(id, ct);
+        if (feature is null)
+            return NotFound();
+
+        var artifacts = await artifactRepository.GetByFeatureIdAsync(id, ct);
+        return Ok(artifacts.Select(a => new ArtifactResponse(a)));
+    }
+
+    [HttpGet("{id:guid}/artifacts/{artifactId:guid}/content")]
+    public async Task<IActionResult> GetArtifactContent(
+        Guid id,
+        Guid artifactId,
+        [FromServices] IArtifactRepository artifactRepository,
+        [FromServices] ICodeHost codeHost,
+        [FromServices] IProjectRepository projectRepository,
+        CancellationToken ct)
+    {
+        var feature = await _featureManager.GetByIdAsync(id, ct);
+        if (feature is null)
+            return NotFound();
+
+        var artifact = await artifactRepository.GetByIdAsync(artifactId, ct);
+        if (artifact is null || artifact.FeatureId != id)
+            return NotFound();
+
+        var project = await projectRepository.GetByIdAsync(feature.ProjectId, ct);
+        if (project is null)
+            return NotFound();
+
+        var content = await codeHost.GetFileContentAsync(
+            project.RepositorySlug, "main", artifact.RepositoryPath, ct);
+
+        if (content is null)
+            return NotFound();
+
+        return Ok(new { content });
     }
 
     [HttpPost("{id:guid}/generate-prd")]
