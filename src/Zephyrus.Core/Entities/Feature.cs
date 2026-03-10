@@ -32,6 +32,17 @@ public class Feature
 
     private Feature() { }
 
+    /// <summary>
+    /// Advances the feature to the next pipeline status using the state machine.
+    /// Returns the previous status for audit logging.
+    /// </summary>
+    public FeatureStatus Advance()
+    {
+        var from = Status;
+        Status = Pipeline.PipelineStateMachine.Next(Status);
+        return from;
+    }
+
     public static Feature Create(Guid projectId, string prompt)
     {
         return new Feature

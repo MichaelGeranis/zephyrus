@@ -2,7 +2,6 @@ using Zephyrus.Core.Agents;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
 using Zephyrus.Core.Interfaces;
-using Zephyrus.Core.Pipeline;
 
 namespace Zephyrus.Application.UseCases;
 
@@ -52,8 +51,7 @@ public sealed class InvokePrdAgentUseCase
         var featureSlug = GenerateSlug(feature.Prompt);
 
         // Transition: Ideation → PrdPending
-        var fromStatus = feature.Status;
-        feature.Status = PipelineStateMachine.Next(feature.Status);
+        var fromStatus = feature.Advance();
         await _featureRepository.UpdateAsync(feature, ct);
         await _pipelineEventRepository.AddAsync(
             PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);

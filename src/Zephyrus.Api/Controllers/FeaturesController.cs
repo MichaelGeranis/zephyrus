@@ -49,18 +49,40 @@ public class FeaturesController : ControllerBase
     {
         var artifact = await useCase.ExecuteAsync(id, ct);
 
-        return Ok(new
-        {
-            artifactId = artifact.Id,
-            repositoryPath = artifact.RepositoryPath,
-            type = artifact.Type.ToString()
-        });
+        return Ok(new ArtifactResponse(artifact));
+    }
+
+    [HttpPost("{id:guid}/artifacts/{artifactId:guid}/approve")]
+    public async Task<IActionResult> ApproveArtifact(
+        Guid id,
+        Guid artifactId,
+        [FromBody] ApproveArtifactRequest request,
+        [FromServices] ApproveArtifactUseCase useCase,
+        CancellationToken ct)
+    {
+        var artifact = await useCase.ExecuteAsync(id, artifactId, request.ApprovedBy, ct);
+
+        return Ok(new ArtifactResponse(artifact));
     }
 }
 
 public record CreateFeatureRequest(Guid ProjectId, string Prompt);
 
+public record ApproveArtifactRequest(string ApprovedBy);
+
 public record FeatureResponse(Guid Id, Guid ProjectId, string Prompt, string Status, DateTime CreatedAt)
 {
     public FeatureResponse(Feature f) : this(f.Id, f.ProjectId, f.Prompt, f.Status.ToString(), f.CreatedAt) { }
+}
+
+public record ArtifactResponse(
+    Guid Id,
+    Guid FeatureId,
+    string Type,
+    string RepositoryPath,
+    string? ApprovedBy,
+    DateTime? ApprovedAt)
+{
+    public ArtifactResponse(Artifact a)
+        : this(a.Id, a.FeatureId, a.Type.ToString(), a.RepositoryPath, a.ApprovedBy, a.ApprovedAt) { }
 }

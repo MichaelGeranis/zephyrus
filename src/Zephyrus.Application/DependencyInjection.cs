@@ -17,6 +17,7 @@ public static class DependencyInjection
 
         // Use cases (orchestration-heavy operations)
         services.AddScoped<InvokePrdAgentUseCase>();
+        services.AddScoped<ApproveArtifactUseCase>();
 
         return services;
     }
