@@ -1,0 +1,114 @@
+using Zephyrus.Core.Agents;
+using Zephyrus.Core.Entities;
+using Zephyrus.Core.Enums;
+using Zephyrus.Core.Interfaces;
+
+namespace Zephyrus.Application.UseCases;
+
+/// <summary>
+/// Orchestrates Architecture Decision Record generation: validates state,
+/// loads the approved PRD, invokes the Architect Agent, commits the output
+/// to the repo, and records the artifact.
+/// </summary>
+public sealed class InvokeArchitectAgentUseCase
+{
+    private readonly IFeatureRepository _featureRepository;
+    private readonly IProjectRepository _projectRepository;
+    private readonly IArtifactRepository _artifactRepository;
+    private readonly IPipelineEventRepository _pipelineEventRepository;
+    private readonly IAgent<ArchitectAgentInput, ArchitectAgentOutput> _architectAgent;
+    private readonly ICodeHost _codeHost;
+
+    public InvokeArchitectAgentUseCase(
+        IFeatureRepository featureRepository,
+        IProjectRepository projectRepository,
+        IArtifactRepository artifactRepository,
+        IPipelineEventRepository pipelineEventRepository,
+        IAgent<ArchitectAgentInput, ArchitectAgentOutput> architectAgent,
+        ICodeHost codeHost)
+    {
+        _featureRepository = featureRepository;
+        _projectRepository = projectRepository;
+        _artifactRepository = artifactRepository;
+        _pipelineEventRepository = pipelineEventRepository;
+        _architectAgent = architectAgent;
+        _codeHost = codeHost;
+    }
+
+    public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    {
+        var feature = await _featureRepository.GetByIdAsync(featureId, ct)
+            ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
+
+        if (feature.Status != FeatureStatus.PrdApproved)
+        {
+            throw new InvalidOperationException(
+                $"Feature must be in PrdApproved status to generate ADR. Current status: {feature.Status}.");
+        }
+
+        var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct)
+            ?? throw new InvalidOperationException($"Project '{feature.ProjectId}' not found.");
+
+        // Load the approved PRD content from the repo
+        var prdArtifact = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Prd, ct)
+            ?? throw new InvalidOperationException($"No approved PRD artifact found for feature '{featureId}'.");
+
+        var prdContent = await _codeHost.GetFileContentAsync(
+            project.RepositorySlug, "main", prdArtifact.RepositoryPath, ct)
+            ?? throw new InvalidOperationException(
+                $"PRD file not found at '{prdArtifact.RepositoryPath}' in repo '{project.RepositorySlug}'.");
+
+        var featureSlug = GenerateSlug(feature.Prompt);
+
+        // Transition: PrdApproved → ArchPending
+        var fromStatus = feature.Advance();
+        await _featureRepository.UpdateAsync(feature, ct);
+        await _pipelineEventRepository.AddAsync(
+            PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+
+        // Invoke the Architect Agent
+        var agentInput = new ArchitectAgentInput
+        {
+            ApprovedPrd = prdContent,
+            ProjectConstitution = project.Config,
+            FeatureSlug = featureSlug
+        };
+
+        var agentOutput = await _architectAgent.RunAsync(agentInput, ct);
+
+        // Commit ADR to repository
+        await _codeHost.CommitFileAsync(
+            project.RepositorySlug,
+            "main",
+            agentOutput.RepositoryPath,
+            agentOutput.Markdown,
+            $"[Zephyrus] Add ADR for {featureSlug}",
+            ct);
+
+        // Record artifact
+        var artifact = Artifact.Create(featureId, ArtifactType.Adr, agentOutput.RepositoryPath);
+        await _artifactRepository.AddAsync(artifact, ct);
+
+        return artifact;
+    }
+
+    private static string GenerateSlug(string prompt)
+    {
+        var slug = prompt.ToLowerInvariant()
+            .Replace(' ', '-')
+            .Replace('\t', '-')
+            .Replace('\n', '-');
+
+        slug = new string(slug.Where(c => char.IsLetterOrDigit(c) || c == '-').ToArray());
+
+        while (slug.Contains("--"))
+            slug = slug.Replace("--", "-");
+
+        slug = slug.Trim('-');
+
+        if (slug.Length > 60)
+            slug = slug[..60].TrimEnd('-');
+
+        return slug;
+    }
+}

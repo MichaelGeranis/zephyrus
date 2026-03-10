@@ -2,18 +2,21 @@ using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
 using Zephyrus.Core.Exceptions;
 using Zephyrus.Core.Interfaces;
+using Zephyrus.Application.Orchestration;
 
 namespace Zephyrus.Application.UseCases;
 
 /// <summary>
 /// Approves an artifact and advances the feature through the pipeline.
 /// This is the reusable approval gate — works for PRD, ADR, Tasks, etc.
+/// After approval, delegates to the PipelineOrchestrator to trigger the next agent.
 /// </summary>
 public sealed class ApproveArtifactUseCase
 {
     private readonly IFeatureRepository _featureRepository;
     private readonly IArtifactRepository _artifactRepository;
     private readonly IPipelineEventRepository _pipelineEventRepository;
+    private readonly PipelineOrchestrator _orchestrator;
 
     /// <summary>
     /// Maps each artifact type to the feature status that must be current
@@ -32,11 +35,13 @@ public sealed class ApproveArtifactUseCase
     public ApproveArtifactUseCase(
         IFeatureRepository featureRepository,
         IArtifactRepository artifactRepository,
-        IPipelineEventRepository pipelineEventRepository)
+        IPipelineEventRepository pipelineEventRepository,
+        PipelineOrchestrator orchestrator)
     {
         _featureRepository = featureRepository;
         _artifactRepository = artifactRepository;
         _pipelineEventRepository = pipelineEventRepository;
+        _orchestrator = orchestrator;
     }
 
     public async Task<Artifact> ExecuteAsync(
@@ -86,6 +91,9 @@ public sealed class ApproveArtifactUseCase
         // Record audit event
         await _pipelineEventRepository.AddAsync(
             PipelineEvent.Create(featureId, fromStatus, feature.Status, approvedBy), ct);
+
+        // Trigger the next agent in the pipeline (if any)
+        await _orchestrator.OnArtifactApprovedAsync(featureId, feature.Status, ct);
 
         return artifact;
     }
