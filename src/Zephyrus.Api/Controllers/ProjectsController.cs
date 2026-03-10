@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Zephyrus.Application.UseCases;
 using Zephyrus.Core.Entities;
-using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.Api.Controllers;
 
@@ -8,26 +8,25 @@ namespace Zephyrus.Api.Controllers;
 [Route("api/[controller]")]
 public class ProjectsController : ControllerBase
 {
-    private readonly IProjectRepository _projectRepository;
-
-    public ProjectsController(IProjectRepository projectRepository)
-    {
-        _projectRepository = projectRepository;
-    }
-
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateProjectRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create(
+        [FromBody] CreateProjectRequest request,
+        [FromServices] CreateProjectUseCase useCase,
+        CancellationToken ct)
     {
-        var project = Project.Create(request.Name, request.Description, request.Config, request.RepositorySlug);
-        await _projectRepository.AddAsync(project, ct);
+        var project = await useCase.ExecuteAsync(
+            request.Name, request.Description, request.Config, request.RepositorySlug, ct);
 
         return CreatedAtAction(nameof(GetById), new { id = project.Id }, new ProjectResponse(project));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
+    public async Task<IActionResult> GetById(
+        Guid id,
+        [FromServices] GetProjectByIdUseCase useCase,
+        CancellationToken ct)
     {
-        var project = await _projectRepository.GetByIdAsync(id, ct);
+        var project = await useCase.ExecuteAsync(id, ct);
         if (project is null)
             return NotFound();
 
@@ -35,9 +34,11 @@ public class ProjectsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll(
+        [FromServices] GetAllProjectsUseCase useCase,
+        CancellationToken ct)
     {
-        var projects = await _projectRepository.GetAllAsync(ct);
+        var projects = await useCase.ExecuteAsync(ct);
         return Ok(projects.Select(p => new ProjectResponse(p)));
     }
 }

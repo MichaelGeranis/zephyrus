@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Zephyrus.Application.UseCases;
 using Zephyrus.Core.Entities;
-using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.Api.Controllers;
 
@@ -9,34 +8,24 @@ namespace Zephyrus.Api.Controllers;
 [Route("api/[controller]")]
 public class FeaturesController : ControllerBase
 {
-    private readonly IFeatureRepository _featureRepository;
-    private readonly IProjectRepository _projectRepository;
-
-    public FeaturesController(
-        IFeatureRepository featureRepository,
-        IProjectRepository projectRepository)
-    {
-        _featureRepository = featureRepository;
-        _projectRepository = projectRepository;
-    }
-
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateFeatureRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create(
+        [FromBody] CreateFeatureRequest request,
+        [FromServices] CreateFeatureUseCase useCase,
+        CancellationToken ct)
     {
-        var project = await _projectRepository.GetByIdAsync(request.ProjectId, ct);
-        if (project is null)
-            return NotFound(new { error = $"Project '{request.ProjectId}' not found." });
-
-        var feature = Feature.Create(request.ProjectId, request.Prompt);
-        await _featureRepository.AddAsync(feature, ct);
+        var feature = await useCase.ExecuteAsync(request.ProjectId, request.Prompt, ct);
 
         return CreatedAtAction(nameof(GetById), new { id = feature.Id }, new FeatureResponse(feature));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
+    public async Task<IActionResult> GetById(
+        Guid id,
+        [FromServices] GetFeatureByIdUseCase useCase,
+        CancellationToken ct)
     {
-        var feature = await _featureRepository.GetByIdAsync(id, ct);
+        var feature = await useCase.ExecuteAsync(id, ct);
         if (feature is null)
             return NotFound();
 
@@ -44,9 +33,12 @@ public class FeaturesController : ControllerBase
     }
 
     [HttpGet("by-project/{projectId:guid}")]
-    public async Task<IActionResult> GetByProject(Guid projectId, CancellationToken ct)
+    public async Task<IActionResult> GetByProject(
+        Guid projectId,
+        [FromServices] GetFeaturesByProjectUseCase useCase,
+        CancellationToken ct)
     {
-        var features = await _featureRepository.GetByProjectIdAsync(projectId, ct);
+        var features = await useCase.ExecuteAsync(projectId, ct);
         return Ok(features.Select(f => new FeatureResponse(f)));
     }
 
