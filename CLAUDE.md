@@ -42,7 +42,12 @@ Separation of Concerns: Clearly separating business rules (inner layers) from in
 The Dependency Rule: Inner layers know nothing about outer layers; dependencies point toward the center.
 Independent of Frameworks/UI/DB: Core business logic is not bound to external tools, making it easy to change or swap them.
 Testable: Business rules can be tested without the user interface, database, or web server.
-SOLID Principles: Utilizes these principles to ensure code is maintainable, flexible, and robust. 
+SOLID Principles: Utilizes these principles to ensure code is maintainable, flexible, and robust.
+
+### Frontend Rules
+- Zephyrus.Web is a thin presentation layer — no business logic whatsoever
+- All validation, state transitions, and orchestration happen server-side in the .NET backend
+- The frontend calls the API and renders the response — nothing more
 
 ## Tech Stack
 
