@@ -1,16 +1,23 @@
 using Microsoft.Extensions.DependencyInjection;
+using Zephyrus.Application.Managers;
+using Zephyrus.Application.UseCases;
 
 namespace Zephyrus.Application;
 
 /// <summary>
 /// Registers Application layer services into the DI container.
-/// Use cases will be registered here as they are implemented.
 /// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        // Use cases will be registered here in future build steps.
+        // Managers
+        services.AddScoped<ProjectManager>();
+        services.AddScoped<FeatureManager>();
+
+        // Use cases (orchestration-heavy operations)
+        services.AddScoped<InvokePrdAgentUseCase>();
+
         return services;
     }
 }
