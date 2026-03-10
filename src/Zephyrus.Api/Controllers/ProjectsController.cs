@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Zephyrus.Application.UseCases;
+using Zephyrus.Application.Managers;
 using Zephyrus.Core.Entities;
 
 namespace Zephyrus.Api.Controllers;
@@ -8,25 +8,26 @@ namespace Zephyrus.Api.Controllers;
 [Route("api/[controller]")]
 public class ProjectsController : ControllerBase
 {
-    [HttpPost]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateProjectRequest request,
-        [FromServices] CreateProjectUseCase useCase,
-        CancellationToken ct)
+    private readonly ProjectManager _projectManager;
+
+    public ProjectsController(ProjectManager projectManager)
     {
-        var project = await useCase.ExecuteAsync(
+        _projectManager = projectManager;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateProjectRequest request, CancellationToken ct)
+    {
+        var project = await _projectManager.CreateAsync(
             request.Name, request.Description, request.Config, request.RepositorySlug, ct);
 
         return CreatedAtAction(nameof(GetById), new { id = project.Id }, new ProjectResponse(project));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(
-        Guid id,
-        [FromServices] GetProjectByIdUseCase useCase,
-        CancellationToken ct)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var project = await useCase.ExecuteAsync(id, ct);
+        var project = await _projectManager.GetByIdAsync(id, ct);
         if (project is null)
             return NotFound();
 
@@ -34,11 +35,9 @@ public class ProjectsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(
-        [FromServices] GetAllProjectsUseCase useCase,
-        CancellationToken ct)
+    public async Task<IActionResult> GetAll(CancellationToken ct)
     {
-        var projects = await useCase.ExecuteAsync(ct);
+        var projects = await _projectManager.GetAllAsync(ct);
         return Ok(projects.Select(p => new ProjectResponse(p)));
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Zephyrus.Application.Managers;
 using Zephyrus.Application.UseCases;
 
 namespace Zephyrus.Application;
@@ -10,17 +11,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        // Project use cases
-        services.AddScoped<CreateProjectUseCase>();
-        services.AddScoped<GetProjectByIdUseCase>();
-        services.AddScoped<GetAllProjectsUseCase>();
+        // Managers
+        services.AddScoped<ProjectManager>();
+        services.AddScoped<FeatureManager>();
 
-        // Feature use cases
-        services.AddScoped<CreateFeatureUseCase>();
-        services.AddScoped<GetFeatureByIdUseCase>();
-        services.AddScoped<GetFeaturesByProjectUseCase>();
-
-        // Agent use cases
+        // Use cases (orchestration-heavy operations)
         services.AddScoped<InvokePrdAgentUseCase>();
 
         return services;
