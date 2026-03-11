@@ -48,9 +48,11 @@ public sealed class PipelineOrchestrator
                 await codeUseCase.ExecuteAsync(featureId, ct);
                 break;
 
-            // Future steps will wire additional agents here:
-            // case FeatureStatus.Coding (all PRs open):
-            //     → trigger QA Agent (Step 10)
+            case FeatureStatus.QaPending:
+                _logger.LogInformation("Feature {FeatureId}: PRs approved, triggering QA Agent.", featureId);
+                var qaUseCase = GetRequiredService<InvokeQaAgentUseCase>();
+                await qaUseCase.ExecuteAsync(featureId, ct);
+                break;
 
             default:
                 _logger.LogDebug("Feature {FeatureId}: No follow-up agent for status {Status}.", featureId, newStatus);

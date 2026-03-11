@@ -89,6 +89,21 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
+        if (systemPrompt.Contains("QA Agent"))
+        {
+            return Task.FromResult("""
+                {
+                  "test_files": [
+                    {
+                      "path": "tests/ExampleTests.cs",
+                      "content": "using Xunit;\n\npublic class ExampleTests\n{\n    [Fact]\n    public void Example_WhenCalled_ShouldReturnTrue()\n    {\n        Assert.True(true);\n    }\n}"
+                    }
+                  ],
+                  "report": "# QA Report\n\n## Summary\nAll tests passed.\n\n## Test Coverage\n- ExampleTests: 1 test\n\n## Results\n- Passed: 1\n- Failed: 0\n- Coverage: 80%"
+                }
+                """);
+        }
+
         if (systemPrompt.Contains("Code Agent"))
         {
             return Task.FromResult("""

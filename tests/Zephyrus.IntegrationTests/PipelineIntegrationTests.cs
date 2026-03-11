@@ -386,6 +386,141 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
     }
 
     [Fact]
+    public async Task FullPipeline_IdeationThroughQaPending_WorksEndToEnd()
+    {
+        // --- Arrange ---
+        Guid projectId;
+        Guid featureId;
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var projectManager = scope.ServiceProvider.GetRequiredService<ProjectManager>();
+            var project = await projectManager.CreateAsync(
+                "QA Pipeline Project",
+                "A project for QA agent testing",
+                "project:\n  name: qa-test\nstack:\n  backend: .NET",
+                "test-owner/qa-test-repo");
+            projectId = project.Id;
+
+            var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
+            var feature = await featureManager.CreateAsync(projectId, "Add qa validation");
+            featureId = feature.Id;
+        }
+
+        // --- Run through PRD → Architect → Tasks → Code pipeline ---
+        Guid prdArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var generatePrd = scope.ServiceProvider.GetRequiredService<InvokePrdAgentUseCase>();
+            prdArtifactId = (await generatePrd.ExecuteAsync(featureId)).Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+        }
+
+        Guid adrArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            adrArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Adr))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, adrArtifactId, "tech-lead@company.com");
+        }
+
+        Guid taskArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            taskArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Task))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, taskArtifactId, "tech-lead@company.com");
+        }
+
+        // Feature should now be in Coding (Code Agent has run)
+        using (var scope = _fixture.CreateScope())
+        {
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+            var feature = await featureRepo.GetByIdAsync(featureId);
+            Assert.Equal(FeatureStatus.Coding, feature!.Status);
+        }
+
+        // --- Act: Approve Pr artifact → triggers QA Agent ---
+        Guid prArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            prArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Pr))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, prArtifactId, "tech-lead@company.com");
+        }
+
+        // --- Assert: Feature is now in QaPending, QA Agent has run ---
+        using (var scope = _fixture.CreateScope())
+        {
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+            var feature = await featureRepo.GetByIdAsync(featureId);
+
+            Assert.NotNull(feature);
+            Assert.Equal(FeatureStatus.QaPending, feature!.Status);
+        }
+
+        // QA Agent was invoked
+        Assert.Single(_fixture.LanguageModel.Calls.Where(c => c.SystemPrompt.Contains("QA Agent")));
+
+        // QA report was committed
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/qa-report-")),
+            "QA report should be committed to the fake code host");
+
+        // Test files were committed
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.Contains("tests/")),
+            "Test files should be committed to the fake code host");
+
+        // Test artifact was recorded
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            var testArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Test);
+
+            Assert.NotNull(testArtifact);
+            Assert.Contains("qa-report-", testArtifact!.RepositoryPath);
+        }
+
+        // Pipeline events: 9 transitions
+        using (var scope = _fixture.CreateScope())
+        {
+            var eventRepo = scope.ServiceProvider.GetRequiredService<IPipelineEventRepository>();
+            var events = await eventRepo.GetByFeatureIdAsync(featureId);
+
+            // 1. Ideation → PrdPending
+            // 2. PrdPending → PrdApproved
+            // 3. PrdApproved → ArchPending
+            // 4. ArchPending → ArchApproved
+            // 5. ArchApproved → TasksPending
+            // 6. TasksPending → TasksApproved
+            // 7. TasksApproved → Coding
+            // 8. Coding → QaPending (Pr approval)
+            Assert.Equal(8, events.Count);
+            Assert.Equal(FeatureStatus.Coding, events[7].FromStatus);
+            Assert.Equal(FeatureStatus.QaPending, events[7].ToStatus);
+        }
+    }
+
+    [Fact]
     public async Task ApproveArtifact_WrongStatus_Throws()
     {
         Guid featureId;
