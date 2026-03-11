@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<InvokePrdAgentUseCase>();
         services.AddScoped<InvokeArchitectAgentUseCase>();
         services.AddScoped<ApproveArtifactUseCase>();
+        services.AddScoped<InvokeTaskAgentUseCase>();
 
         return services;
     }

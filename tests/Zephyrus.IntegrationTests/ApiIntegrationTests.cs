@@ -329,10 +329,10 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
             new { approvedBy = "techlead@test.com" });
         Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
 
-        // Feature should be at ArchApproved
+        // Feature should be at TasksPending (orchestrator triggers Task Agent after ADR approval)
         var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}");
         var updated = await Deserialize<FeatureDto>(featureResponse);
-        Assert.Equal("ArchApproved", updated.Status);
+        Assert.Equal("TasksPending", updated.Status);
     }
 
     [Fact]

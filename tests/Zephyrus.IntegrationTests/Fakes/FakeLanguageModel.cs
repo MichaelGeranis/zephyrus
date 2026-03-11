@@ -89,6 +89,31 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
+        if (systemPrompt.Contains("Task Agent"))
+        {
+            return Task.FromResult("""
+                {
+                  "tasks": [
+                    {
+                      "title": "Create database migration for test table",
+                      "body": "## Description\nAdd EF Core migration for the test table.\n\n## Acceptance Criteria\n- [ ] Migration creates test table\n- [ ] Migration is reversible",
+                      "agent_type": "DB"
+                    },
+                    {
+                      "title": "Implement TestService in Application layer",
+                      "body": "## Description\nAdd the TestService that processes test data.\n\n## Acceptance Criteria\n- [ ] Service validates input\n- [ ] Service returns correct response",
+                      "agent_type": "BE"
+                    },
+                    {
+                      "title": "Add test page to frontend",
+                      "body": "## Description\nCreate the Next.js page for the test feature.\n\n## Acceptance Criteria\n- [ ] Page renders form\n- [ ] Page calls API endpoint",
+                      "agent_type": "FE"
+                    }
+                  ]
+                }
+                """);
+        }
+
         return Task.FromResult("# Fake agent output");
     }
 }

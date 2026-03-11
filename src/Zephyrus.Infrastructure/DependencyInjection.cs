@@ -40,6 +40,7 @@ public static class DependencyInjection
         // Agents
         services.AddScoped<IAgent<PrdAgentInput, PrdAgentOutput>, PrdAgent>();
         services.AddScoped<IAgent<ArchitectAgentInput, ArchitectAgentOutput>, ArchitectAgent>();
+        services.AddScoped<IAgent<TaskAgentInput, TaskAgentOutput>, TaskAgent>();
 
         return services;
     }

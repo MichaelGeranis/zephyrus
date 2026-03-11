@@ -86,6 +86,20 @@ public class FeaturesController : ControllerBase
         return Ok(new { content });
     }
 
+    [HttpGet("{id:guid}/tasks")]
+    public async Task<IActionResult> GetTasks(
+        Guid id,
+        [FromServices] ITaskItemRepository taskItemRepository,
+        CancellationToken ct)
+    {
+        var feature = await _featureManager.GetByIdAsync(id, ct);
+        if (feature is null)
+            return NotFound();
+
+        var tasks = await taskItemRepository.GetByFeatureIdAsync(id, ct);
+        return Ok(tasks.Select(t => new TaskItemResponse(t)));
+    }
+
     [HttpPost("{id:guid}/generate-prd")]
     public async Task<IActionResult> GeneratePrd(
         Guid id,
@@ -130,4 +144,17 @@ public record ArtifactResponse(
 {
     public ArtifactResponse(Artifact a)
         : this(a.Id, a.FeatureId, a.Type.ToString(), a.RepositoryPath, a.ApprovedBy, a.ApprovedAt) { }
+}
+
+public record TaskItemResponse(
+    Guid Id,
+    Guid FeatureId,
+    string Title,
+    string Status,
+    string AgentType,
+    int? ExternalIssueId,
+    int? PrId)
+{
+    public TaskItemResponse(TaskItem t)
+        : this(t.Id, t.FeatureId, t.Title, t.Status.ToString(), t.AgentType.ToString(), t.ExternalIssueId, t.PrId) { }
 }

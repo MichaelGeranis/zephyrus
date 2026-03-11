@@ -55,6 +55,7 @@ public sealed class PipelineFixture : IDisposable
         // Agents (real implementations wired to fake LLM)
         services.AddScoped<IAgent<PrdAgentInput, PrdAgentOutput>, PrdAgent>();
         services.AddScoped<IAgent<ArchitectAgentInput, ArchitectAgentOutput>, ArchitectAgent>();
+        services.AddScoped<IAgent<TaskAgentInput, TaskAgentOutput>, TaskAgent>();
 
         // Application layer (managers, orchestrator, use cases)
         services.AddApplication();

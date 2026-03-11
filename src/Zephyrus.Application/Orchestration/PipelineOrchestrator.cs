@@ -36,9 +36,13 @@ public sealed class PipelineOrchestrator
                 await architectUseCase.ExecuteAsync(featureId, ct);
                 break;
 
+            case FeatureStatus.ArchApproved:
+                _logger.LogInformation("Feature {FeatureId}: ADR approved, triggering Task Agent.", featureId);
+                var taskUseCase = GetRequiredService<InvokeTaskAgentUseCase>();
+                await taskUseCase.ExecuteAsync(featureId, ct);
+                break;
+
             // Future steps will wire additional agents here:
-            // case FeatureStatus.ArchApproved:
-            //     → trigger Task Agent (Step 8)
             // case FeatureStatus.TasksApproved:
             //     → trigger Code Agents (Step 9)
             // case FeatureStatus.Coding (all PRs open):
