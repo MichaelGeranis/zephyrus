@@ -69,7 +69,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/prd-")),
             "PRD should be committed to the fake code host");
 
-        Assert.Single(_fixture.LanguageModel.Calls.Where(c => c.SystemPrompt.Contains("PRD Agent")));
+        Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("PRD Agent"));
 
         // --- Act 2: Approve the PRD ---
         // This should trigger the orchestrator → Architect Agent automatically
@@ -94,7 +94,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         }
 
         // Architect Agent was invoked
-        Assert.Single(_fixture.LanguageModel.Calls.Where(c => c.SystemPrompt.Contains("Architect Agent")));
+        Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("Architect Agent"));
 
         // ADR was committed to fake repo
         Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/adr-")),
@@ -197,7 +197,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         }
 
         // Task Agent was invoked
-        Assert.Single(_fixture.LanguageModel.Calls.Where(c => c.SystemPrompt.Contains("Task Agent")));
+        Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("Task Agent"));
 
         // Task summary was committed to fake repo
         Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/tasks-")),
@@ -480,7 +480,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         }
 
         // QA Agent was invoked
-        Assert.Single(_fixture.LanguageModel.Calls.Where(c => c.SystemPrompt.Contains("QA Agent")));
+        Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("QA Agent"));
 
         // QA report was committed
         Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/qa-report-")),
