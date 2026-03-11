@@ -89,6 +89,20 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
+        if (systemPrompt.Contains("Code Agent"))
+        {
+            return Task.FromResult("""
+                {
+                  "files": [
+                    {
+                      "path": "src/Example.cs",
+                      "content": "namespace Example;\n\npublic class Example\n{\n    public string Name { get; set; } = string.Empty;\n}"
+                    }
+                  ]
+                }
+                """);
+        }
+
         if (systemPrompt.Contains("Task Agent"))
         {
             return Task.FromResult("""

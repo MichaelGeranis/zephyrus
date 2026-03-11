@@ -251,6 +251,141 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
     }
 
     [Fact]
+    public async Task FullPipeline_IdeationThroughCoding_WorksEndToEnd()
+    {
+        // --- Arrange: Create a project and feature ---
+        Guid projectId;
+        Guid featureId;
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var projectManager = scope.ServiceProvider.GetRequiredService<ProjectManager>();
+            var project = await projectManager.CreateAsync(
+                "Code Pipeline Project",
+                "A project for code agent testing",
+                "project:\n  name: code-test\nstack:\n  backend: .NET",
+                "test-owner/code-test-repo");
+            projectId = project.Id;
+
+            var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
+            var feature = await featureManager.CreateAsync(projectId, "Add code generation");
+            featureId = feature.Id;
+        }
+
+        // --- Run through PRD → Approve → Architect → Approve → Tasks → Approve ---
+        Guid prdArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var generatePrd = scope.ServiceProvider.GetRequiredService<InvokePrdAgentUseCase>();
+            var prdArtifact = await generatePrd.ExecuteAsync(featureId);
+            prdArtifactId = prdArtifact.Id;
+        }
+
+        // Approve PRD → triggers Architect Agent
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+        }
+
+        // Approve ADR → triggers Task Agent
+        Guid adrArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            var adrArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Adr);
+            Assert.NotNull(adrArtifact);
+            adrArtifactId = adrArtifact!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, adrArtifactId, "tech-lead@company.com");
+        }
+
+        // Approve Tasks → triggers Code Agents
+        Guid taskArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            var taskArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Task);
+            Assert.NotNull(taskArtifact);
+            taskArtifactId = taskArtifact!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, taskArtifactId, "tech-lead@company.com");
+        }
+
+        // --- Assert: Feature is now in Coding status ---
+        using (var scope = _fixture.CreateScope())
+        {
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+            var feature = await featureRepo.GetByIdAsync(featureId);
+
+            Assert.NotNull(feature);
+            Assert.Equal(FeatureStatus.Coding, feature!.Status);
+        }
+
+        // Code Agent was invoked once per task (3 tasks in fake response)
+        Assert.Equal(3, _fixture.LanguageModel.Calls.Count(c => c.SystemPrompt.Contains("Code Agent")));
+
+        // Feature branches were created
+        Assert.Equal(3, _fixture.CodeHost.CreatedBranches.Count(b => b.StartsWith("feature/add-code-generation/")));
+
+        // PRs were created (one per task)
+        Assert.Equal(3, _fixture.CodeHost.CreatedPrs.Count(p => p.Repo == "test-owner/code-test-repo"));
+
+        // Files were committed to feature branches
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path == "src/Example.cs"),
+            "Code files should be committed to the fake code host");
+
+        // All TaskItems should have PRs linked and be in PrOpen status
+        using (var scope = _fixture.CreateScope())
+        {
+            var taskItemRepo = scope.ServiceProvider.GetRequiredService<ITaskItemRepository>();
+            var tasks = await taskItemRepo.GetByFeatureIdAsync(featureId);
+
+            Assert.Equal(3, tasks.Count);
+            Assert.All(tasks, t =>
+            {
+                Assert.NotNull(t.PrId);
+                Assert.Equal(TaskItemStatus.PrOpen, t.Status);
+            });
+        }
+
+        // Pr artifact was recorded
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            var prArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Pr);
+
+            Assert.NotNull(prArtifact);
+        }
+
+        // Pipeline events: 7 transitions total
+        using (var scope = _fixture.CreateScope())
+        {
+            var eventRepo = scope.ServiceProvider.GetRequiredService<IPipelineEventRepository>();
+            var events = await eventRepo.GetByFeatureIdAsync(featureId);
+
+            // 1. Ideation → PrdPending
+            // 2. PrdPending → PrdApproved
+            // 3. PrdApproved → ArchPending
+            // 4. ArchPending → ArchApproved
+            // 5. ArchApproved → TasksPending
+            // 6. TasksPending → TasksApproved
+            // 7. TasksApproved → Coding
+            Assert.Equal(7, events.Count);
+            Assert.Equal(FeatureStatus.TasksApproved, events[6].FromStatus);
+            Assert.Equal(FeatureStatus.Coding, events[6].ToStatus);
+        }
+    }
+
+    [Fact]
     public async Task ApproveArtifact_WrongStatus_Throws()
     {
         Guid featureId;

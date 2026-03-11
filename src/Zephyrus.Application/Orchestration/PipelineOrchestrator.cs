@@ -42,9 +42,13 @@ public sealed class PipelineOrchestrator
                 await taskUseCase.ExecuteAsync(featureId, ct);
                 break;
 
+            case FeatureStatus.TasksApproved:
+                _logger.LogInformation("Feature {FeatureId}: Tasks approved, triggering Code Agents.", featureId);
+                var codeUseCase = GetRequiredService<InvokeCodeAgentUseCase>();
+                await codeUseCase.ExecuteAsync(featureId, ct);
+                break;
+
             // Future steps will wire additional agents here:
-            // case FeatureStatus.TasksApproved:
-            //     → trigger Code Agents (Step 9)
             // case FeatureStatus.Coding (all PRs open):
             //     → trigger QA Agent (Step 10)
 
