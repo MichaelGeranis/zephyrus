@@ -1,14 +1,28 @@
 # Zephyrus — Technical Architecture
 
 This document is the complete technical reference for how Zephyrus is built.
-For business rules and domain logic, see [BUSINESS_CONCEPTS.md](BUSINESS_CONCEPTS.md).
-For Claude Code working context, see [CLAUDE.md](CLAUDE.md).
+For business rules and domain logic, see [BUSINESS.md](BUSINESS.md).
 
 ---
 
 ## Clean Architecture
 
 Zephyrus follows Clean Architecture (Robert C. Martin) with strict layer separation.
+
+```
+┌─────────────────────────────────────┐
+│         Frameworks & Drivers        │  ← Web, DB, GitHub, Claude API
+│  ┌───────────────────────────────┐  │
+│  │     Interface Adapters        │  │  ← Controllers, API, Presenters
+│  │  ┌─────────────────────────┐  │  │
+│  │  │   Use Cases/Managers    │  │  │  ← Application business rules
+│  │  │  ┌───────────────────┐  │  │  │
+│  │  │  │     Entities      │  │  │  │  ← Core domain, state machine
+│  │  │  └───────────────────┘  │  │  │
+│  │  └─────────────────────────┘  │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+```
 
 **Principles:**
 - **Separation of Concerns**: Business rules (inner layers) are isolated from infrastructure details (outer layers).
@@ -46,11 +60,11 @@ Api → Application → Core ← Infrastructure
 ### Zephyrus.Core — Entities Layer
 
 **What belongs here:**
-- Domain entities: `Feature`, `Project`, `Artifact`, `TaskItem`, `PipelineEvent`, `Deployment`
-- Interfaces: `IFeatureRepository`, `IProjectRepository`, `IArtifactRepository`, `ITaskItemRepository`, `IPipelineEventRepository`, `IDeploymentRepository`, `IAgentRunner`, `ICodeHost`, `ILanguageModel`
-- Enums: `FeatureStatus`, `ArtifactType`, `AgentType`, `TaskItemStatus`, `DeploymentStatus`
+- Domain entities: `Feature`, `Project`, etc.
+- Interfaces: `IFeatureRepository`, `IProjectRepository`, etc.
+- Enums: `FeatureStatus`, `ArtifactType`, etc.
 - State machine: `PipelineStateMachine`
-- Domain exceptions: `InvalidTransitionException`, `ArtifactNotFoundException`
+- Domain exceptions: `InvalidTransitionException`, `ArtifactNotFoundException`, etc.
 - Agent input/output record types: `PrdAgentInput`, `PrdAgentOutput`, etc.
 
 **What does NOT belong here:**
@@ -60,14 +74,15 @@ Api → Application → Core ← Infrastructure
 
 **Enforce with:** `<PackageReference>` count in .csproj must stay at zero.
 
-### Zephyrus.Application — Use Cases Layer
+### Zephyrus.Application — Use Cases Layer/Application business rules
 
 **What belongs here:**
-- Use cases: `InvokePrdAgentUseCase`, `ApproveArtifactUseCase`, `AdvancePipelineUseCase`, etc.
+- Product Use cases: `InvokePrdAgentUseCase`, `ApproveArtifactUseCase`, `AdvancePipelineUseCase`, etc.
+- Managers/Services:  `FeatureManager`, etc.
 - Orchestrator logic (calls Core interfaces only — never Infrastructure directly)
 - Pipeline event handlers
 - Agent coordination logic
-- Application-level exceptions: `PipelineConflictException`, `UnauthorizedApprovalException`
+- Application-level exceptions: `PipelineConflictException`, `UnauthorizedApprovalException`, etc.
 
 **What does NOT belong here:**
 - EF Core, Octokit, HttpClient references
@@ -102,7 +117,7 @@ Zephyrus.Infrastructure/
 ### Zephyrus.Api — Interface Adapters Layer (thin)
 
 **What belongs here:**
-- ASP.NET Core controllers (thin — delegate immediately to use cases)
+- ASP.NET Core controllers (thin — delegate immediately managers)
 - Request/Response DTOs
 - DI container registration (wires Infrastructure implementations to Core interfaces)
 - Middleware: auth, error handling, logging
@@ -140,23 +155,6 @@ Zephyrus.Infrastructure
 Zephyrus.Web
   └── talks to → Zephyrus.Api (over REST)
 ```
-
-```
-┌─────────────────────────────────────┐
-│         Frameworks & Drivers        │  ← Web, DB, GitHub, Claude API
-│  ┌───────────────────────────────┐  │
-│  │     Interface Adapters        │  │  ← Controllers, API, Presenters
-│  │  ┌─────────────────────────┐  │  │
-│  │  │      Use Cases          │  │  │  ← Application business rules
-│  │  │  ┌───────────────────┐  │  │  │
-│  │  │  │     Entities      │  │  │  │  ← Core domain, state machine
-│  │  │  └───────────────────┘  │  │  │
-│  │  └─────────────────────────┘  │  │
-│  └───────────────────────────────┘  │
-└─────────────────────────────────────┘
-```
-
----
 
 ## Data Model — Full Field Definitions
 
@@ -356,102 +354,3 @@ architecture:
   api_style: "REST + JSON"
   auth: "JWT"
 ```
-
----
-
-## GitHub Integration Rules
-
-- **GitHub is source of truth for all code artifacts** — never store file contents in the database
-- Branch naming: `feature/{feature-slug}/{task-id}`
-- PR title format: `[Zephyrus] {task-title} (#{issue-number})`
-- All PRs must be linked to their originating GitHub Issue
-- All Octokit.net calls live in `Zephyrus.Infrastructure/GitHub/` only
-- The rest of the codebase uses `ICodeHost` — never Octokit types directly
-- Webhook events drive pipeline state advancement where possible
-- Fallback: polling every 60 seconds for missed webhooks
-
----
-
-## Naming Conventions
-
-| Type | Convention | Example |
-|------|-----------|---------|
-| Use cases | `{Verb}{Noun}UseCase` | `ApproveArtifactUseCase` |
-| Agents | `{Name}Agent` | `PrdAgent`, `ArchitectAgent` |
-| Interfaces (Core) | `I{Name}` | `IFeatureRepository`, `ICodeHost` |
-| Repository implementations | `{Name}Repository` | `FeatureRepository` |
-| Request DTOs | `{Name}Request` | `ApproveArtifactRequest` |
-| Response DTOs | `{Name}Response` | `ArtifactResponse` |
-| Domain entities | PascalCase noun | `Feature`, `Artifact` |
-| Enums | PascalCase | `FeatureStatus.PrdApproved` |
-| EF migrations | `{YYYYMMDD}_{Description}` | `20260310_AddFeatureTable` |
-| Agent input records | `{Name}AgentInput` | `PrdAgentInput` |
-| Agent output records | `{Name}AgentOutput` | `PrdAgentOutput` |
-
----
-
-## Ubiquitous Language
-
-These terms must be used consistently across all code, comments, and variable names.
-
-| Term | Meaning | Never use instead |
-|------|---------|-------------------|
-| `Feature` | A unit of work moving through the pipeline | story, ticket, item, task |
-| `Artifact` | An output produced by an agent (PRD, ADR, PR, tests) | document, output, result |
-| `Constitution` | The project config file every agent reads | config, settings (except for infra wiring) |
-| `Pipeline` | The full sequence of stages for a Feature | workflow, process |
-| `ApprovalGate` | A human validation step between stages | checkpoint, review |
-| `Agent` | A stateless AI function that takes input and produces an artifact | bot, assistant, worker |
-| `Orchestrator` | The deterministic state machine that coordinates agents | coordinator, manager |
-| `Task` | An atomic unit of work assigned to the Code Agent | subtask, item, issue |
-
----
-
-## Testing Rules
-
-- Every use case must have a unit test in `Zephyrus.Tests/Application/`
-- Every agent must have a unit test in `Zephyrus.Tests/Infrastructure/AI/`
-- Unit tests mock all infrastructure via Core interfaces
-- No test may make a real HTTP call or DB call
-- Integration tests live in `Zephyrus.IntegrationTests/` with SQLite in-memory + fakes
-- Test naming: `{MethodName}_When{Condition}_Should{ExpectedResult}`
-
-### Test Fakes
-
-| Real Service | Test Fake | Behavior |
-|-------------|-----------|----------|
-| PostgreSQL | SQLite in-memory | Shared connection, schema auto-created |
-| GitHub (Octokit) | `FakeCodeHost` | Dictionary-backed file storage |
-| Claude API | `FakeLanguageModel` | Returns canned markdown per agent type |
-
----
-
-## Pre-Commit Checklist
-
-Before finalizing any implementation, verify:
-
-- [ ] No `HttpClient` instantiation outside `Zephyrus.Infrastructure`
-- [ ] No `DbContext` reference outside `Zephyrus.Infrastructure/Persistence/`
-- [ ] No Octokit types referenced outside `Zephyrus.Infrastructure/GitHub/`
-- [ ] No business logic in `Zephyrus.Api` controllers
-- [ ] `Zephyrus.Core` has zero `<PackageReference>` entries
-- [ ] `Zephyrus.Application` references only `Zephyrus.Core`
-- [ ] Every new agent has a corresponding unit test
-- [ ] All new entities follow ubiquitous language naming
-- [ ] State machine not bypassed — all status changes go through `PipelineStateMachine`
-
----
-
-## What To Do When Unsure Where Something Goes
-
-1. **Is it a domain rule or entity?** → `Zephyrus.Core`
-2. **Is it a use case or orchestration step?** → `Zephyrus.Application`
-3. **Is it a call to an external system (DB, GitHub, Claude)?** → `Zephyrus.Infrastructure`
-4. **Is it HTTP in/out or DI wiring?** → `Zephyrus.Api`
-5. **Still unsure?** → Default to `Zephyrus.Core` and work outward
-
----
-
-*This document is the complete technical architecture reference.
-It takes precedence over CLAUDE.md in case of conflict on structural matters.
-Update it whenever a significant architectural decision is made.*

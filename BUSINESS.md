@@ -2,7 +2,6 @@
 
 This document defines the business rules, domain concepts, and use cases of Zephyrus.
 For technical architecture and implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md).
-For Claude Code working context, see [CLAUDE.md](CLAUDE.md).
 
 ---
 
@@ -332,3 +331,18 @@ It contains:
 | **PipelineEvent** | An audit log entry recording a state transition |
 | **Slug** | A URL-safe, lowercase, hyphenated version of a feature prompt (e.g., `add-user-authentication`) |
 | **State Machine** | The `PipelineStateMachine` that enforces valid transitions between feature statuses |
+
+## Ubiquitous Language
+
+These terms must be used consistently across all code, comments, and variable names.
+
+| Term | Meaning | Never use instead |
+|------|---------|-------------------|
+| `Feature` | A unit of work moving through the pipeline | story, ticket, item, task |
+| `Artifact` | An output produced by an agent (PRD, ADR, PR, tests) | document, output, result |
+| `Constitution` | The project config file every agent reads | config, settings (except for infra wiring) |
+| `Pipeline` | The full sequence of stages for a Feature | workflow, process |
+| `ApprovalGate` | A human validation step between stages | checkpoint, review |
+| `Agent` | A stateless AI function that takes input and produces an artifact | bot, assistant, worker |
+| `Orchestrator` | The deterministic state machine that coordinates agents | coordinator, manager |
+| `Task` | An atomic unit of work assigned to the Code Agent | subtask, item, issue |
