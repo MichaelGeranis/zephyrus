@@ -38,9 +38,10 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
             if (dbDescriptor is not null)
                 services.Remove(dbDescriptor);
 
-            // Remove the real ICodeHost and ILanguageModel
+            // Remove the real ICodeHost, ILanguageModel, and IPromptLoader
             RemoveService<ICodeHost>(services);
             RemoveService<ILanguageModel>(services);
+            RemoveService<IPromptLoader>(services);
 
             // Add SQLite in-memory database
             services.AddDbContext<ZephyrusDbContext>(options =>
@@ -49,6 +50,7 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
             // Add fakes
             services.AddSingleton<ICodeHost>(FakeCodeHost);
             services.AddSingleton<ILanguageModel>(FakeLanguageModel);
+            services.AddSingleton<IPromptLoader>(new FakePromptLoader());
 
             // Ensure schema is created
             var sp = services.BuildServiceProvider();

@@ -51,6 +51,7 @@ public sealed class PipelineFixture : IDisposable
         // Fakes for external services
         services.AddSingleton<ICodeHost>(CodeHost);
         services.AddSingleton<ILanguageModel>(LanguageModel);
+        services.AddSingleton<IPromptLoader>(new FakePromptLoader());
 
         // Agents (real implementations wired to fake LLM)
         services.AddScoped<IAgent<PrdAgentInput, PrdAgentOutput>, PrdAgent>();

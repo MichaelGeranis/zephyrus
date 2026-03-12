@@ -15,6 +15,7 @@ public static class DependencyInjection
         // Managers
         services.AddScoped<ProjectManager>();
         services.AddScoped<FeatureManager>();
+        services.AddScoped<ArtifactManager>();
 
         // Orchestrator
         services.AddScoped<PipelineOrchestrator>();

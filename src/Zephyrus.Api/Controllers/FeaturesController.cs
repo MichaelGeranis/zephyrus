@@ -42,50 +42,6 @@ public class FeaturesController : ControllerBase
         return Ok(features.Select(f => new FeatureResponse(f)));
     }
 
-    [HttpGet("{id:guid}/artifacts")]
-    public async Task<IActionResult> GetArtifacts(
-        Guid id,
-        [FromServices] IArtifactRepository artifactRepository,
-        CancellationToken ct)
-    {
-        var feature = await _featureManager.GetByIdAsync(id, ct);
-        if (feature is null)
-            return NotFound();
-
-        var artifacts = await artifactRepository.GetByFeatureIdAsync(id, ct);
-        return Ok(artifacts.Select(a => new ArtifactResponse(a)));
-    }
-
-    [HttpGet("{id:guid}/artifacts/{artifactId:guid}/content")]
-    public async Task<IActionResult> GetArtifactContent(
-        Guid id,
-        Guid artifactId,
-        [FromServices] IArtifactRepository artifactRepository,
-        [FromServices] ICodeHost codeHost,
-        [FromServices] IProjectRepository projectRepository,
-        CancellationToken ct)
-    {
-        var feature = await _featureManager.GetByIdAsync(id, ct);
-        if (feature is null)
-            return NotFound();
-
-        var artifact = await artifactRepository.GetByIdAsync(artifactId, ct);
-        if (artifact is null || artifact.FeatureId != id)
-            return NotFound();
-
-        var project = await projectRepository.GetByIdAsync(feature.ProjectId, ct);
-        if (project is null)
-            return NotFound();
-
-        var content = await codeHost.GetFileContentAsync(
-            project.RepositorySlug, "main", artifact.RepositoryPath, ct);
-
-        if (content is null)
-            return NotFound();
-
-        return Ok(new { content });
-    }
-
     [HttpGet("{id:guid}/tasks")]
     public async Task<IActionResult> GetTasks(
         Guid id,
@@ -125,18 +81,6 @@ public class FeaturesController : ControllerBase
         return Ok(new ArtifactResponse(artifact));
     }
 
-    [HttpPost("{id:guid}/artifacts/{artifactId:guid}/approve")]
-    public async Task<IActionResult> ApproveArtifact(
-        Guid id,
-        Guid artifactId,
-        [FromBody] ApproveArtifactRequest request,
-        [FromServices] ApproveArtifactUseCase useCase,
-        CancellationToken ct)
-    {
-        var artifact = await useCase.ExecuteAsync(id, artifactId, request.ApprovedBy, ct);
-
-        return Ok(new ArtifactResponse(artifact));
-    }
 }
 
 public record CreateFeatureRequest(Guid ProjectId, string Prompt);

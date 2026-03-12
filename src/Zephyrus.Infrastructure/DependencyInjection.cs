@@ -37,6 +37,10 @@ public static class DependencyInjection
         services.Configure<ClaudeLanguageModelOptions>(configuration.GetSection(ClaudeLanguageModelOptions.SectionName));
         services.AddHttpClient<ILanguageModel, ClaudeLanguageModel>();
 
+        // Prompt loader
+        var promptsDirectory = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "prompts");
+        services.AddSingleton<IPromptLoader>(new FilePromptLoader(Path.GetFullPath(promptsDirectory)));
+
         // Agents
         services.AddScoped<IAgent<PrdAgentInput, PrdAgentOutput>, PrdAgent>();
         services.AddScoped<IAgent<ArchitectAgentInput, ArchitectAgentOutput>, ArchitectAgent>();
