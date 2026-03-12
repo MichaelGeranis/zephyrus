@@ -1,3 +1,4 @@
+using Zephyrus.Api.Middleware;
 using Zephyrus.Application;
 using Zephyrus.Infrastructure;
 
@@ -21,6 +22,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors();
 app.MapControllers();
 

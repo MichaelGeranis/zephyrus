@@ -163,8 +163,8 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
 
         // Generate again — should fail (not in Ideation)
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null));
+        var response = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // ──────────────────────────────────────────────
@@ -350,10 +350,10 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
             new { approvedBy = "pm@test.com" });
 
         // Second approve — should fail
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _client.PostAsJsonAsync(
-                $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-                new { approvedBy = "other@test.com" }));
+        var secondApprove = await _client.PostAsJsonAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
+            new { approvedBy = "other@test.com" });
+        Assert.Equal(HttpStatusCode.BadRequest, secondApprove.StatusCode);
     }
 
     [Fact]
@@ -371,10 +371,10 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
             new { approvedBy = "pm@test.com" });
 
         // Try to approve the PRD again — feature is no longer in PrdPending
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _client.PostAsJsonAsync(
-                $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-                new { approvedBy = "pm@test.com" }));
+        var wrongStatusApprove = await _client.PostAsJsonAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
+            new { approvedBy = "pm@test.com" });
+        Assert.Equal(HttpStatusCode.BadRequest, wrongStatusApprove.StatusCode);
     }
 
     // ──────────────────────────────────────────────
