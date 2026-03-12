@@ -15,7 +15,7 @@ public sealed class FakeLanguageModel : ILanguageModel
         Calls.Add((systemPrompt, userMessage));
 
         // Return different canned responses based on agent type
-        if (systemPrompt.Contains("PRD Agent"))
+        if (systemPrompt.Contains("You are the PRD Agent"))
         {
             return Task.FromResult("""
                 # PRD: Test Feature
@@ -48,7 +48,7 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
-        if (systemPrompt.Contains("Architect Agent"))
+        if (systemPrompt.Contains("You are the Architect Agent"))
         {
             return Task.FromResult("""
                 # ADR: Test Feature
@@ -89,7 +89,7 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
-        if (systemPrompt.Contains("QA Agent"))
+        if (systemPrompt.Contains("You are the QA Agent"))
         {
             return Task.FromResult("""
                 {
@@ -104,7 +104,7 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
-        if (systemPrompt.Contains("Code Agent"))
+        if (systemPrompt.Contains("You are the Code Agent"))
         {
             return Task.FromResult("""
                 {
@@ -118,7 +118,7 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
-        if (systemPrompt.Contains("Task Agent"))
+        if (systemPrompt.Contains("You are the Task Agent"))
         {
             return Task.FromResult("""
                 {
@@ -143,7 +143,7 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
-        if (systemPrompt.Contains("DevOps Agent"))
+        if (systemPrompt.Contains("You are the DevOps Agent"))
         {
             return Task.FromResult("""
                 {
