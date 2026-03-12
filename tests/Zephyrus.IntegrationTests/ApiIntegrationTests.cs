@@ -408,6 +408,236 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     }
 
     // ──────────────────────────────────────────────
+    // Tasks API
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Tasks_EmptyInitially()
+    {
+        var project = await CreateProject("TasksEmpty", "org/tasks-empty");
+        var feature = await CreateFeature(project.Id, "Tasks empty test");
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/tasks");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var tasks = await Deserialize<TaskItemDto[]>(response);
+        Assert.Empty(tasks);
+    }
+
+    [Fact]
+    public async Task Tasks_FeatureNotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/tasks");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Tasks_AfterTaskAgentRuns_ReturnsTaskItems()
+    {
+        var project = await CreateProject("TasksAfterAgent", "org/tasks-after-agent");
+        var feature = await CreateFeature(project.Id, "Tasks after agent");
+
+        // PRD → Approve → Architect → Approve ADR → Task Agent runs
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+
+        // Feature should now be at TasksPending with tasks created
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/tasks");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var tasks = await Deserialize<TaskItemDto[]>(response);
+        Assert.Equal(3, tasks.Length);
+        Assert.Contains(tasks, t => t.AgentType == "DB");
+        Assert.Contains(tasks, t => t.AgentType == "BE");
+        Assert.Contains(tasks, t => t.AgentType == "FE");
+        Assert.All(tasks, t =>
+        {
+            Assert.Equal("Pending", t.Status);
+            Assert.NotNull(t.ExternalIssueId);
+            Assert.NotEmpty(t.Title);
+        });
+    }
+
+    [Fact]
+    public async Task Tasks_AfterCodeAgentRuns_HavePrIds()
+    {
+        var project = await CreateProject("TasksWithPrs", "org/tasks-with-prs");
+        var feature = await CreateFeature(project.Id, "Tasks with PRs");
+
+        // Run through to Coding (Task Agent → approve → Code Agent)
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+        var task = await GetArtifactByType(feature.Id, "Task");
+        await ApproveArtifact(feature.Id, task.Id, "tl@test.com");
+
+        // Feature is now in Coding — tasks should have PrIds
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}");
+        var updated = await Deserialize<FeatureDto>(featureResponse);
+        Assert.Equal("Coding", updated.Status);
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/tasks");
+        var tasks = await Deserialize<TaskItemDto[]>(response);
+        Assert.Equal(3, tasks.Length);
+        Assert.All(tasks, t =>
+        {
+            Assert.Equal("PrOpen", t.Status);
+            Assert.NotNull(t.PrId);
+        });
+    }
+
+    // ──────────────────────────────────────────────
+    // Pipeline Events — Multi-Transition
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task PipelineEvents_AfterApprovalChain_ReturnsMultipleTransitions()
+    {
+        var project = await CreateProject("EventsChain", "org/events-chain");
+        var feature = await CreateFeature(project.Id, "Events chain test");
+
+        // PRD → Approve → Architect runs (3 transitions: Ideation→PrdPending, PrdPending→PrdApproved, PrdApproved→ArchPending)
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var events = await Deserialize<PipelineEventDto[]>(response);
+        Assert.Equal(3, events.Length);
+
+        // Verify chronological order and transition chain
+        Assert.Equal("Ideation", events[0].FromStatus);
+        Assert.Equal("PrdPending", events[0].ToStatus);
+        Assert.Equal("system", events[0].TriggeredBy);
+
+        Assert.Equal("PrdPending", events[1].FromStatus);
+        Assert.Equal("PrdApproved", events[1].ToStatus);
+        Assert.Equal("pm@test.com", events[1].TriggeredBy);
+
+        Assert.Equal("PrdApproved", events[2].FromStatus);
+        Assert.Equal("ArchPending", events[2].ToStatus);
+        Assert.Equal("system", events[2].TriggeredBy);
+    }
+
+    [Fact]
+    public async Task PipelineEvents_EmptyForNewFeature()
+    {
+        var project = await CreateProject("EventsEmpty", "org/events-empty");
+        var feature = await CreateFeature(project.Id, "Events empty test");
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var events = await Deserialize<PipelineEventDto[]>(response);
+        Assert.Empty(events);
+    }
+
+    // ──────────────────────────────────────────────
+    // Full Pipeline via HTTP API
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task FullPipelineViaApi_IdeationThroughDeployed()
+    {
+        var project = await CreateProject("FullApiPipeline", "org/full-api-pipeline");
+        var feature = await CreateFeature(project.Id, "Full pipeline via API");
+
+        // Step 1: Generate PRD → PrdPending
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await AssertFeatureStatus(feature.Id, "PrdPending");
+
+        // Step 2: Approve PRD → PrdApproved → Architect runs → ArchPending
+        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        await AssertFeatureStatus(feature.Id, "ArchPending");
+
+        // Step 3: Approve ADR → ArchApproved → Task Agent runs → TasksPending
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+        await AssertFeatureStatus(feature.Id, "TasksPending");
+
+        // Step 4: Approve Tasks → TasksApproved → Code Agents run → Coding
+        var task = await GetArtifactByType(feature.Id, "Task");
+        await ApproveArtifact(feature.Id, task.Id, "tl@test.com");
+        await AssertFeatureStatus(feature.Id, "Coding");
+
+        // Step 5: Approve PR → Coding → QaPending, QA Agent runs
+        var pr = await GetArtifactByType(feature.Id, "Pr");
+        await ApproveArtifact(feature.Id, pr.Id, "tl@test.com");
+        await AssertFeatureStatus(feature.Id, "QaPending");
+
+        // Step 6: Approve Test → QaApproved, DevOps Agent runs
+        var test = await GetArtifactByType(feature.Id, "Test");
+        await ApproveArtifact(feature.Id, test.Id, "qa@test.com");
+        await AssertFeatureStatus(feature.Id, "QaApproved");
+
+        // Step 7: Approve Workflow → Deployed
+        var workflow = await GetArtifactByType(feature.Id, "Workflow");
+        await ApproveArtifact(feature.Id, workflow.Id, "tl@test.com");
+        await AssertFeatureStatus(feature.Id, "Deployed");
+
+        // Verify all artifacts exist
+        var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts");
+        var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
+        Assert.Equal(6, artifacts.Length);
+        Assert.Contains(artifacts, a => a.Type == "Prd");
+        Assert.Contains(artifacts, a => a.Type == "Adr");
+        Assert.Contains(artifacts, a => a.Type == "Task");
+        Assert.Contains(artifacts, a => a.Type == "Pr");
+        Assert.Contains(artifacts, a => a.Type == "Test");
+        Assert.Contains(artifacts, a => a.Type == "Workflow");
+        Assert.All(artifacts, a => Assert.NotNull(a.ApprovedBy));
+
+        // Verify 10 pipeline events (full pipeline)
+        var eventsResponse = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events");
+        var events = await Deserialize<PipelineEventDto[]>(eventsResponse);
+        Assert.Equal(10, events.Length);
+        Assert.Equal("Ideation", events[0].FromStatus);
+        Assert.Equal("PrdPending", events[0].ToStatus);
+        Assert.Equal("QaApproved", events[9].FromStatus);
+        Assert.Equal("Deployed", events[9].ToStatus);
+
+        // Verify tasks have PRs
+        var tasksResponse = await _client.GetAsync($"/api/features/{feature.Id}/tasks");
+        var tasks = await Deserialize<TaskItemDto[]>(tasksResponse);
+        Assert.Equal(3, tasks.Length);
+        Assert.All(tasks, t => Assert.NotNull(t.PrId));
+    }
+
+    [Fact]
+    public async Task WorkflowArtifactContent_ReturnsYaml()
+    {
+        var project = await CreateProject("WorkflowContent", "org/workflow-content");
+        var feature = await CreateFeature(project.Id, "Workflow content test");
+
+        // Run through full pipeline to QaApproved (DevOps Agent creates workflow)
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+        var task = await GetArtifactByType(feature.Id, "Task");
+        await ApproveArtifact(feature.Id, task.Id, "tl@test.com");
+        var pr = await GetArtifactByType(feature.Id, "Pr");
+        await ApproveArtifact(feature.Id, pr.Id, "tl@test.com");
+        var test = await GetArtifactByType(feature.Id, "Test");
+        await ApproveArtifact(feature.Id, test.Id, "qa@test.com");
+
+        // Get workflow artifact content
+        var workflow = await GetArtifactByType(feature.Id, "Workflow");
+        var response = await _client.GetAsync(
+            $"/api/features/{feature.Id}/artifacts/{workflow.Id}/content");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await Deserialize<ContentDto>(response);
+        Assert.Contains("Deploy", body.Content);
+        Assert.Contains("dotnet", body.Content);
+    }
+
+    // ──────────────────────────────────────────────
     // ADR Content
     // ──────────────────────────────────────────────
 
@@ -461,6 +691,37 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         return await Deserialize<FeatureDto>(response);
     }
 
+    private async Task<ArtifactDto> GeneratePrdAndGetArtifact(Guid featureId)
+    {
+        var response = await _client.PostAsync($"/api/features/{featureId}/generate-prd", null);
+        response.EnsureSuccessStatusCode();
+        return await Deserialize<ArtifactDto>(response);
+    }
+
+    private async Task ApproveArtifact(Guid featureId, Guid artifactId, string approvedBy)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/api/features/{featureId}/artifacts/{artifactId}/approve",
+            new { approvedBy });
+        response.EnsureSuccessStatusCode();
+    }
+
+    private async Task<ArtifactDto> GetArtifactByType(Guid featureId, string type)
+    {
+        var response = await _client.GetAsync($"/api/features/{featureId}/artifacts");
+        response.EnsureSuccessStatusCode();
+        var artifacts = await Deserialize<ArtifactDto[]>(response);
+        return artifacts.Single(a => a.Type == type);
+    }
+
+    private async Task AssertFeatureStatus(Guid featureId, string expectedStatus)
+    {
+        var response = await _client.GetAsync($"/api/features/{featureId}");
+        response.EnsureSuccessStatusCode();
+        var feature = await Deserialize<FeatureDto>(response);
+        Assert.Equal(expectedStatus, feature.Status);
+    }
+
     private static async Task<T> Deserialize<T>(HttpResponseMessage response)
     {
         var json = await response.Content.ReadAsStringAsync();
@@ -471,6 +732,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     private record ProjectDto(Guid Id, string Name, string Description, string RepositorySlug, DateTime CreatedAt);
     private record FeatureDto(Guid Id, Guid ProjectId, string Prompt, string Status, DateTime CreatedAt);
     private record ArtifactDto(Guid Id, Guid FeatureId, string Type, string RepositoryPath, string? ApprovedBy, DateTime? ApprovedAt);
+    private record TaskItemDto(Guid Id, Guid FeatureId, string Title, string Status, string AgentType, int? ExternalIssueId, int? PrId);
     private record ContentDto(string Content);
     private record PipelineEventDto(Guid Id, Guid FeatureId, string FromStatus, string ToStatus, string TriggeredBy, DateTime Timestamp);
 }
