@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IAgent<TaskAgentInput, TaskAgentOutput>, TaskAgent>();
         services.AddScoped<IAgent<CodeAgentInput, CodeAgentOutput>, CodeAgent>();
         services.AddScoped<IAgent<QaAgentInput, QaAgentOutput>, QaAgent>();
+        services.AddScoped<IAgent<DevOpsAgentInput, DevOpsAgentOutput>, DevOpsAgent>();
 
         return services;
     }

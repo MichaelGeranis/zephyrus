@@ -58,6 +58,7 @@ public sealed class PipelineFixture : IDisposable
         services.AddScoped<IAgent<TaskAgentInput, TaskAgentOutput>, TaskAgent>();
         services.AddScoped<IAgent<CodeAgentInput, CodeAgentOutput>, CodeAgent>();
         services.AddScoped<IAgent<QaAgentInput, QaAgentOutput>, QaAgent>();
+        services.AddScoped<IAgent<DevOpsAgentInput, DevOpsAgentOutput>, DevOpsAgent>();
 
         // Application layer (managers, orchestrator, use cases)
         services.AddApplication();

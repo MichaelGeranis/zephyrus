@@ -143,6 +143,15 @@ public sealed class FakeLanguageModel : ILanguageModel
                 """);
         }
 
+        if (systemPrompt.Contains("DevOps Agent"))
+        {
+            return Task.FromResult("""
+                {
+                  "workflow_yaml": "name: Deploy\n\non:\n  push:\n    branches: [main]\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup .NET\n        uses: actions/setup-dotnet@v4\n        with:\n          dotnet-version: '8.0.x'\n      - name: Restore\n        run: dotnet restore\n      - name: Build\n        run: dotnet build --no-restore\n      - name: Test\n        run: dotnet test --no-build\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    if: github.ref == 'refs/heads/main'\n    steps:\n      - uses: actions/checkout@v4\n      - name: Deploy to Railway\n        run: railway up\n        env:\n          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}"
+                }
+                """);
+        }
+
         return Task.FromResult("# Fake agent output");
     }
 }

@@ -521,6 +521,177 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
     }
 
     [Fact]
+    public async Task FullPipeline_IdeationThroughQaApproved_WorksEndToEnd()
+    {
+        // --- Arrange ---
+        Guid projectId;
+        Guid featureId;
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var projectManager = scope.ServiceProvider.GetRequiredService<ProjectManager>();
+            var project = await projectManager.CreateAsync(
+                "DevOps Pipeline Project",
+                "A project for DevOps agent testing",
+                "project:\n  name: devops-test\nstack:\n  backend: .NET\ndeployment:\n  target: Railway",
+                "test-owner/devops-test-repo");
+            projectId = project.Id;
+
+            var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
+            var feature = await featureManager.CreateAsync(projectId, "Add devops workflow");
+            featureId = feature.Id;
+        }
+
+        // --- Run through PRD → Architect → Tasks → Code → QA pipeline ---
+        Guid prdArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var generatePrd = scope.ServiceProvider.GetRequiredService<InvokePrdAgentUseCase>();
+            prdArtifactId = (await generatePrd.ExecuteAsync(featureId)).Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+        }
+
+        Guid adrArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            adrArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Adr))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, adrArtifactId, "tech-lead@company.com");
+        }
+
+        Guid taskArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            taskArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Task))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, taskArtifactId, "tech-lead@company.com");
+        }
+
+        // Approve Pr → triggers QA Agent
+        Guid prArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            prArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Pr))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, prArtifactId, "tech-lead@company.com");
+        }
+
+        // Feature should now be in QaPending
+        using (var scope = _fixture.CreateScope())
+        {
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+            var feature = await featureRepo.GetByIdAsync(featureId);
+            Assert.Equal(FeatureStatus.QaPending, feature!.Status);
+        }
+
+        // --- Act: Approve Test artifact → triggers DevOps Agent ---
+        Guid testArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            testArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Test))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, testArtifactId, "qa@company.com");
+        }
+
+        // --- Assert: Feature is now in QaApproved, DevOps Agent has run ---
+        using (var scope = _fixture.CreateScope())
+        {
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+            var feature = await featureRepo.GetByIdAsync(featureId);
+
+            Assert.NotNull(feature);
+            Assert.Equal(FeatureStatus.QaApproved, feature!.Status);
+        }
+
+        // DevOps Agent was invoked
+        Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("DevOps Agent"));
+
+        // Workflow file was committed
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path == ".github/workflows/deploy.yml"),
+            "Workflow file should be committed to the fake code host");
+
+        // Workflow artifact was recorded
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            var workflowArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Workflow);
+
+            Assert.NotNull(workflowArtifact);
+            Assert.Equal(".github/workflows/deploy.yml", workflowArtifact!.RepositoryPath);
+        }
+
+        // --- Act 2: Approve Workflow artifact → feature advances to Deployed ---
+        Guid workflowArtifactId;
+        using (var scope = _fixture.CreateScope())
+        {
+            var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
+            workflowArtifactId = (await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Workflow))!.Id;
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
+            await approve.ExecuteAsync(featureId, workflowArtifactId, "tech-lead@company.com");
+        }
+
+        // --- Assert: Feature is now Deployed ---
+        using (var scope = _fixture.CreateScope())
+        {
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+            var feature = await featureRepo.GetByIdAsync(featureId);
+
+            Assert.NotNull(feature);
+            Assert.Equal(FeatureStatus.Deployed, feature!.Status);
+        }
+
+        // Pipeline events: 10 transitions (full pipeline)
+        using (var scope = _fixture.CreateScope())
+        {
+            var eventRepo = scope.ServiceProvider.GetRequiredService<IPipelineEventRepository>();
+            var events = await eventRepo.GetByFeatureIdAsync(featureId);
+
+            // 1. Ideation → PrdPending
+            // 2. PrdPending → PrdApproved
+            // 3. PrdApproved → ArchPending
+            // 4. ArchPending → ArchApproved
+            // 5. ArchApproved → TasksPending
+            // 6. TasksPending → TasksApproved
+            // 7. TasksApproved → Coding
+            // 8. Coding → QaPending
+            // 9. QaPending → QaApproved
+            // 10. QaApproved → Deployed
+            Assert.Equal(10, events.Count);
+            Assert.Equal(FeatureStatus.QaApproved, events[9].FromStatus);
+            Assert.Equal(FeatureStatus.Deployed, events[9].ToStatus);
+        }
+    }
+
+    [Fact]
     public async Task ApproveArtifact_WrongStatus_Throws()
     {
         Guid featureId;

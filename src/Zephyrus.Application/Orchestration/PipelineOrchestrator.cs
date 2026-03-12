@@ -54,6 +54,12 @@ public sealed class PipelineOrchestrator
                 await qaUseCase.ExecuteAsync(featureId, ct);
                 break;
 
+            case FeatureStatus.QaApproved:
+                _logger.LogInformation("Feature {FeatureId}: Tests approved, triggering DevOps Agent.", featureId);
+                var devOpsUseCase = GetRequiredService<InvokeDevOpsAgentUseCase>();
+                await devOpsUseCase.ExecuteAsync(featureId, ct);
+                break;
+
             default:
                 _logger.LogDebug("Feature {FeatureId}: No follow-up agent for status {Status}.", featureId, newStatus);
                 break;

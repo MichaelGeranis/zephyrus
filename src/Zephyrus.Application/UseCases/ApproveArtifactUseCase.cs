@@ -30,6 +30,7 @@ public sealed class ApproveArtifactUseCase
         { ArtifactType.Task, FeatureStatus.TasksPending },
         { ArtifactType.Pr, FeatureStatus.Coding },
         { ArtifactType.Test, FeatureStatus.QaPending },
+        { ArtifactType.Workflow, FeatureStatus.QaApproved },
     };
 
     public ApproveArtifactUseCase(

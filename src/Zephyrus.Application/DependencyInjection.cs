@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<InvokeTaskAgentUseCase>();
         services.AddScoped<InvokeCodeAgentUseCase>();
         services.AddScoped<InvokeQaAgentUseCase>();
+        services.AddScoped<InvokeDevOpsAgentUseCase>();
 
         return services;
     }

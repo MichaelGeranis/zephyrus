@@ -9,5 +9,6 @@ public enum ArtifactType
     Adr,
     Task,
     Pr,
-    Test
+    Test,
+    Workflow
 }
