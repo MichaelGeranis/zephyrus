@@ -17,7 +17,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-import type { Project, Feature, Artifact } from "./types";
+import type { Project, Feature, Artifact, TaskItem, PipelineEvent } from "./types";
 
 export const api = {
   // Projects
@@ -49,6 +49,14 @@ export const api = {
         body: JSON.stringify({ approvedBy }),
       }
     ),
+
+  // Tasks
+  getTasks: (featureId: string) =>
+    request<TaskItem[]>(`/api/features/${featureId}/tasks`),
+
+  // Pipeline Events
+  getPipelineEvents: (featureId: string) =>
+    request<PipelineEvent[]>(`/api/features/${featureId}/pipeline-events`),
 
   // PRD Generation
   generatePrd: (featureId: string) =>

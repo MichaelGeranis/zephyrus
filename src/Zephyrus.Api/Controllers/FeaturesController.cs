@@ -100,6 +100,20 @@ public class FeaturesController : ControllerBase
         return Ok(tasks.Select(t => new TaskItemResponse(t)));
     }
 
+    [HttpGet("{id:guid}/pipeline-events")]
+    public async Task<IActionResult> GetPipelineEvents(
+        Guid id,
+        [FromServices] IPipelineEventRepository pipelineEventRepository,
+        CancellationToken ct)
+    {
+        var feature = await _featureManager.GetByIdAsync(id, ct);
+        if (feature is null)
+            return NotFound();
+
+        var events = await pipelineEventRepository.GetByFeatureIdAsync(id, ct);
+        return Ok(events.Select(e => new PipelineEventResponse(e)));
+    }
+
     [HttpPost("{id:guid}/generate-prd")]
     public async Task<IActionResult> GeneratePrd(
         Guid id,
@@ -144,6 +158,18 @@ public record ArtifactResponse(
 {
     public ArtifactResponse(Artifact a)
         : this(a.Id, a.FeatureId, a.Type.ToString(), a.RepositoryPath, a.ApprovedBy, a.ApprovedAt) { }
+}
+
+public record PipelineEventResponse(
+    Guid Id,
+    Guid FeatureId,
+    string FromStatus,
+    string ToStatus,
+    string TriggeredBy,
+    DateTime Timestamp)
+{
+    public PipelineEventResponse(PipelineEvent e)
+        : this(e.Id, e.FeatureId, e.FromStatus.ToString(), e.ToStatus.ToString(), e.TriggeredBy, e.Timestamp) { }
 }
 
 public record TaskItemResponse(

@@ -5,22 +5,31 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { StatusBadge, PipelineProgress } from "@/components/StatusBadge";
-import { APPROVABLE_STATUSES } from "@/lib/types";
-import type { Feature, Artifact } from "@/lib/types";
+import { APPROVABLE_STATUSES, STAGE_LABELS } from "@/lib/types";
+import type { Feature, Artifact, TaskItem, PipelineEvent } from "@/lib/types";
 
 export default function FeatureDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [feature, setFeature] = useState<Feature | null>(null);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function loadData() {
-    Promise.all([api.getFeature(id), api.getArtifacts(id)])
-      .then(([f, a]) => {
+    Promise.all([
+      api.getFeature(id),
+      api.getArtifacts(id),
+      api.getTasks(id),
+      api.getPipelineEvents(id),
+    ])
+      .then(([f, a, t, e]) => {
         setFeature(f);
         setArtifacts(a);
+        setTasks(t);
+        setEvents(e);
       })
       .finally(() => setLoading(false));
   }
@@ -87,12 +96,19 @@ export default function FeatureDetailPage() {
         </div>
       )}
 
+      {awaitingApproval && (
+        <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+          Awaiting approval for <strong>{APPROVABLE_STATUSES[feature.status]}</strong> artifact.
+          Review and approve below to advance the pipeline.
+        </div>
+      )}
+
       {/* Artifacts */}
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Artifacts</h2>
       {artifacts.length === 0 ? (
-        <p className="text-gray-500 text-sm">No artifacts generated yet.</p>
+        <p className="text-gray-500 text-sm mb-6">No artifacts generated yet.</p>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-3 mb-6">
           {artifacts.map((artifact) => (
             <div
               key={artifact.id}
@@ -123,6 +139,107 @@ export default function FeatureDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Tasks */}
+      {tasks.length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Tasks</h2>
+          <div className="grid gap-2 mb-6">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
+              >
+                <div className="flex items-center gap-3">
+                  <TaskStatusIcon status={task.status} />
+                  <div>
+                    <p className="text-sm text-gray-900">{task.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">
+                        {task.agentType}
+                      </span>
+                      {task.externalIssueId && (
+                        <span className="text-xs text-gray-400">
+                          Issue #{task.externalIssueId}
+                        </span>
+                      )}
+                      {task.prId && (
+                        <span className="text-xs text-gray-400">PR #{task.prId}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${taskStatusColor(task.status)}`}
+                >
+                  {task.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Pipeline Timeline */}
+      {events.length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Pipeline Timeline</h2>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="space-y-0">
+              {[...events].reverse().map((event, i) => (
+                <div key={event.id} className="flex gap-3">
+                  {/* Timeline connector */}
+                  <div className="flex flex-col items-center">
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1.5" />
+                    {i < events.length - 1 && (
+                      <div className="w-px flex-1 bg-gray-200 my-1" />
+                    )}
+                  </div>
+                  {/* Event content */}
+                  <div className="pb-4">
+                    <p className="text-sm text-gray-900">
+                      <span className="text-gray-500">
+                        {STAGE_LABELS[event.fromStatus] ?? event.fromStatus}
+                      </span>
+                      {" → "}
+                      <span className="font-medium">
+                        {STAGE_LABELS[event.toStatus] ?? event.toStatus}
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {event.triggeredBy} &middot;{" "}
+                      {new Date(event.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
+}
+
+function TaskStatusIcon({ status }: { status: string }) {
+  if (status === "Done")
+    return <div className="w-4 h-4 rounded-full bg-green-500 flex-shrink-0" />;
+  if (status === "PrOpen")
+    return <div className="w-4 h-4 rounded-full bg-blue-500 flex-shrink-0" />;
+  if (status === "InProgress")
+    return <div className="w-4 h-4 rounded-full bg-yellow-500 flex-shrink-0" />;
+  return <div className="w-4 h-4 rounded-full bg-gray-300 flex-shrink-0" />;
+}
+
+function taskStatusColor(status: string): string {
+  switch (status) {
+    case "Done":
+      return "bg-green-100 text-green-700";
+    case "PrOpen":
+      return "bg-blue-100 text-blue-700";
+    case "InProgress":
+      return "bg-yellow-100 text-yellow-700";
+    default:
+      return "bg-gray-100 text-gray-600";
+  }
 }

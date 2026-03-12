@@ -378,6 +378,36 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     }
 
     // ──────────────────────────────────────────────
+    // Pipeline Events
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task PipelineEvents_ReturnsTransitionHistory()
+    {
+        var project = await CreateProject("EventsTest", "org/events-test");
+        var feature = await CreateFeature(project.Id, "Pipeline events test");
+
+        // Generate PRD → Ideation → PrdPending
+        await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
+
+        // GET /api/features/{id}/pipeline-events
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var events = await Deserialize<PipelineEventDto[]>(response);
+        Assert.Single(events);
+        Assert.Equal("Ideation", events[0].FromStatus);
+        Assert.Equal("PrdPending", events[0].ToStatus);
+    }
+
+    [Fact]
+    public async Task PipelineEvents_FeatureNotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/pipeline-events");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
     // ADR Content
     // ──────────────────────────────────────────────
 
@@ -442,4 +472,5 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     private record FeatureDto(Guid Id, Guid ProjectId, string Prompt, string Status, DateTime CreatedAt);
     private record ArtifactDto(Guid Id, Guid FeatureId, string Type, string RepositoryPath, string? ApprovedBy, DateTime? ApprovedAt);
     private record ContentDto(string Content);
+    private record PipelineEventDto(Guid Id, Guid FeatureId, string FromStatus, string ToStatus, string TriggeredBy, DateTime Timestamp);
 }

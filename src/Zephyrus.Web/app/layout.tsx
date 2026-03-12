@@ -17,6 +17,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Zephyrus
             </Link>
             <nav className="flex gap-4 text-sm text-gray-600">
+              <Link href="/dashboard" className="hover:text-gray-900">
+                Dashboard
+              </Link>
               <Link href="/projects" className="hover:text-gray-900">
                 Projects
               </Link>
