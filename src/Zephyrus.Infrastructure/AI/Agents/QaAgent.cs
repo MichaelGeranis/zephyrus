@@ -86,7 +86,9 @@ public sealed class QaAgent : IAgent<QaAgentInput, QaAgentOutput>
             });
         }
 
-        var report = root.GetProperty("report").GetString()
+        if (!root.TryGetProperty("report", out var reportElement))
+            throw new InvalidOperationException("QA report is required.");
+        var report = reportElement.GetString()
             ?? throw new InvalidOperationException("QA report is required.");
 
         return (testFiles, report);

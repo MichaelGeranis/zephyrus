@@ -70,9 +70,14 @@ public sealed class CodeAgent : IAgent<CodeAgentInput, CodeAgentOutput>
 
         foreach (var fileElement in filesArray.EnumerateArray())
         {
-            var path = fileElement.GetProperty("path").GetString()
+            if (!fileElement.TryGetProperty("path", out var pathElement))
+                throw new InvalidOperationException("File path is required.");
+            var path = pathElement.GetString()
                 ?? throw new InvalidOperationException("File path is required.");
-            var content = fileElement.GetProperty("content").GetString()
+
+            if (!fileElement.TryGetProperty("content", out var contentElement))
+                throw new InvalidOperationException("File content is required.");
+            var content = contentElement.GetString()
                 ?? throw new InvalidOperationException("File content is required.");
 
             files.Add(new GeneratedFile

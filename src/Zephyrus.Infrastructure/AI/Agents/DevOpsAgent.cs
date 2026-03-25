@@ -64,7 +64,9 @@ public sealed class DevOpsAgent : IAgent<DevOpsAgentInput, DevOpsAgentOutput>
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        return root.GetProperty("workflow_yaml").GetString()
+        if (!root.TryGetProperty("workflow_yaml", out var yamlElement))
+            throw new InvalidOperationException("Workflow YAML is required.");
+        return yamlElement.GetString()
             ?? throw new InvalidOperationException("Workflow YAML is required.");
     }
 }
