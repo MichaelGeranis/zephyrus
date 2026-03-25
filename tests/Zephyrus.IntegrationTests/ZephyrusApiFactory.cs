@@ -38,8 +38,8 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
             if (dbDescriptor is not null)
                 services.Remove(dbDescriptor);
 
-            // Remove the real ICodeHost, ILanguageModel, and IPromptLoader
-            RemoveService<ICodeHost>(services);
+            // Remove the real ICodeHostFactory, ILanguageModel, and IPromptLoader
+            RemoveService<ICodeHostFactory>(services);
             RemoveService<ILanguageModel>(services);
             RemoveService<IPromptLoader>(services);
 
@@ -48,7 +48,7 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
                 options.UseSqlite(_connection));
 
             // Add fakes
-            services.AddSingleton<ICodeHost>(FakeCodeHost);
+            services.AddSingleton<ICodeHostFactory>(new FakeCodeHostFactory(FakeCodeHost));
             services.AddSingleton<ILanguageModel>(FakeLanguageModel);
             services.AddSingleton<IPromptLoader>(new FakePromptLoader());
 

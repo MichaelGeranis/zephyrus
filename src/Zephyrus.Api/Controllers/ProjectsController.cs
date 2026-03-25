@@ -19,7 +19,7 @@ public class ProjectsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateProjectRequest request, CancellationToken ct)
     {
         var project = await _projectManager.CreateAsync(
-            request.Name, request.Description, request.Config, request.RepositorySlug, ct);
+            request.Name, request.Description, request.Config, request.RepositorySlug, request.GitHubToken, ct);
 
         return CreatedAtAction(nameof(GetById), new { id = project.Id }, new ProjectResponse(project));
     }
@@ -42,7 +42,7 @@ public class ProjectsController : ControllerBase
     }
 }
 
-public record CreateProjectRequest(string Name, string Description, string Config, string RepositorySlug);
+public record CreateProjectRequest(string Name, string Description, string Config, string RepositorySlug, string GitHubToken);
 
 public record ProjectResponse(Guid Id, string Name, string Description, string RepositorySlug, DateTime CreatedAt)
 {

@@ -19,7 +19,7 @@ public sealed class InvokeTaskAgentUseCase
     private readonly ITaskItemRepository _taskItemRepository;
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly IAgent<TaskAgentInput, TaskAgentOutput> _taskAgent;
-    private readonly ICodeHost _codeHost;
+    private readonly ICodeHostFactory _codeHostFactory;
     private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeTaskAgentUseCase(
@@ -29,7 +29,7 @@ public sealed class InvokeTaskAgentUseCase
         ITaskItemRepository taskItemRepository,
         IPipelineEventRepository pipelineEventRepository,
         IAgent<TaskAgentInput, TaskAgentOutput> taskAgent,
-        ICodeHost codeHost,
+        ICodeHostFactory codeHostFactory,
         IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
@@ -38,7 +38,7 @@ public sealed class InvokeTaskAgentUseCase
         _taskItemRepository = taskItemRepository;
         _pipelineEventRepository = pipelineEventRepository;
         _taskAgent = taskAgent;
-        _codeHost = codeHost;
+        _codeHostFactory = codeHostFactory;
         _agentInvocationRepository = agentInvocationRepository;
     }
 
@@ -60,7 +60,8 @@ public sealed class InvokeTaskAgentUseCase
         var prdArtifact = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Prd, ct)
             ?? throw new InvalidOperationException($"No approved PRD artifact found for feature '{featureId}'.");
 
-        var prdContent = await _codeHost.GetFileContentAsync(
+        var codeHost = _codeHostFactory.Create(project.GitHubToken);
+        var prdContent = await codeHost.GetFileContentAsync(
             project.RepositorySlug, "main", prdArtifact.RepositoryPath, ct)
             ?? throw new InvalidOperationException(
                 $"PRD file not found at '{prdArtifact.RepositoryPath}' in repo '{project.RepositorySlug}'.");
@@ -69,7 +70,7 @@ public sealed class InvokeTaskAgentUseCase
         var adrArtifact = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Adr, ct)
             ?? throw new InvalidOperationException($"No approved ADR artifact found for feature '{featureId}'.");
 
-        var adrContent = await _codeHost.GetFileContentAsync(
+        var adrContent = await codeHost.GetFileContentAsync(
             project.RepositorySlug, "main", adrArtifact.RepositoryPath, ct)
             ?? throw new InvalidOperationException(
                 $"ADR file not found at '{adrArtifact.RepositoryPath}' in repo '{project.RepositorySlug}'.");
@@ -103,7 +104,7 @@ public sealed class InvokeTaskAgentUseCase
         // Create GitHub Issues and TaskItems for each task
         foreach (var taskDef in agentOutput.Tasks)
         {
-            var issueId = await _codeHost.CreateIssueAsync(
+            var issueId = await codeHost.CreateIssueAsync(
                 project.RepositorySlug,
                 taskDef.Title,
                 taskDef.Body,
@@ -120,7 +121,7 @@ public sealed class InvokeTaskAgentUseCase
         await _artifactRepository.AddAsync(artifact, ct);
 
         // Commit task summary to repository
-        await _codeHost.CommitFileAsync(
+        await codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
             artifact.RepositoryPath,

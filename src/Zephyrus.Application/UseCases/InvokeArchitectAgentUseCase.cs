@@ -18,7 +18,7 @@ public sealed class InvokeArchitectAgentUseCase
     private readonly IArtifactRepository _artifactRepository;
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly IAgent<ArchitectAgentInput, ArchitectAgentOutput> _architectAgent;
-    private readonly ICodeHost _codeHost;
+    private readonly ICodeHostFactory _codeHostFactory;
     private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeArchitectAgentUseCase(
@@ -27,7 +27,7 @@ public sealed class InvokeArchitectAgentUseCase
         IArtifactRepository artifactRepository,
         IPipelineEventRepository pipelineEventRepository,
         IAgent<ArchitectAgentInput, ArchitectAgentOutput> architectAgent,
-        ICodeHost codeHost,
+        ICodeHostFactory codeHostFactory,
         IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
@@ -35,7 +35,7 @@ public sealed class InvokeArchitectAgentUseCase
         _artifactRepository = artifactRepository;
         _pipelineEventRepository = pipelineEventRepository;
         _architectAgent = architectAgent;
-        _codeHost = codeHost;
+        _codeHostFactory = codeHostFactory;
         _agentInvocationRepository = agentInvocationRepository;
     }
 
@@ -57,7 +57,8 @@ public sealed class InvokeArchitectAgentUseCase
         var prdArtifact = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Prd, ct)
             ?? throw new InvalidOperationException($"No approved PRD artifact found for feature '{featureId}'.");
 
-        var prdContent = await _codeHost.GetFileContentAsync(
+        var codeHost = _codeHostFactory.Create(project.GitHubToken);
+        var prdContent = await codeHost.GetFileContentAsync(
             project.RepositorySlug, "main", prdArtifact.RepositoryPath, ct)
             ?? throw new InvalidOperationException(
                 $"PRD file not found at '{prdArtifact.RepositoryPath}' in repo '{project.RepositorySlug}'.");
@@ -92,7 +93,7 @@ public sealed class InvokeArchitectAgentUseCase
         await _artifactRepository.AddAsync(artifact, ct);
 
         // Commit ADR to repository
-        await _codeHost.CommitFileAsync(
+        await codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
             artifact.RepositoryPath,

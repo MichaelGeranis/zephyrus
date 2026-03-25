@@ -8,18 +8,18 @@ public sealed class ArtifactManager
     private readonly IArtifactRepository _artifactRepository;
     private readonly IFeatureRepository _featureRepository;
     private readonly IProjectRepository _projectRepository;
-    private readonly ICodeHost _codeHost;
+    private readonly ICodeHostFactory _codeHostFactory;
 
     public ArtifactManager(
         IArtifactRepository artifactRepository,
         IFeatureRepository featureRepository,
         IProjectRepository projectRepository,
-        ICodeHost codeHost)
+        ICodeHostFactory codeHostFactory)
     {
         _artifactRepository = artifactRepository;
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
-        _codeHost = codeHost;
+        _codeHostFactory = codeHostFactory;
     }
 
     public async Task<IReadOnlyList<Artifact>> GetByFeatureIdAsync(Guid featureId, CancellationToken ct = default)
@@ -50,7 +50,8 @@ public sealed class ArtifactManager
         if (project is null)
             return null;
 
-        return await _codeHost.GetFileContentAsync(
+        var codeHost = _codeHostFactory.Create(project.GitHubToken);
+        return await codeHost.GetFileContentAsync(
             project.RepositorySlug, "main", artifact.RepositoryPath, ct);
     }
 }

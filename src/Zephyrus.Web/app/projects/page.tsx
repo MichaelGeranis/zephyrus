@@ -15,6 +15,7 @@ export default function ProjectsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [repositorySlug, setRepositorySlug] = useState("");
+  const [gitHubToken, setGitHubToken] = useState("");
   const [config, setConfig] = useState("");
 
   function loadProjects() {
@@ -30,10 +31,11 @@ export default function ProjectsPage() {
     setCreating(true);
     setError(null);
     try {
-      await api.createProject(name, description, config, repositorySlug);
+      await api.createProject(name, description, config, repositorySlug, gitHubToken);
       setName("");
       setDescription("");
       setRepositorySlug("");
+      setGitHubToken("");
       setConfig("");
       setShowForm(false);
       loadProjects();
@@ -100,6 +102,19 @@ export default function ProjectsPage() {
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="owner/repo"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              GitHub Token
+            </label>
+            <input
+              type="password"
+              value={gitHubToken}
+              onChange={(e) => setGitHubToken(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
             />
           </div>
           <div>

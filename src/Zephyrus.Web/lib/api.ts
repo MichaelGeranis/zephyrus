@@ -23,10 +23,10 @@ export const api = {
   // Projects
   getProjects: () => request<Project[]>("/api/projects"),
   getProject: (id: string) => request<Project>(`/api/projects/${id}`),
-  createProject: (name: string, description: string, config: string, repositorySlug: string) =>
+  createProject: (name: string, description: string, config: string, repositorySlug: string, gitHubToken: string) =>
     request<Project>("/api/projects", {
       method: "POST",
-      body: JSON.stringify({ name, description, config, repositorySlug }),
+      body: JSON.stringify({ name, description, config, repositorySlug, gitHubToken }),
     }),
 
   // Features

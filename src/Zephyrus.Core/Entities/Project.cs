@@ -20,6 +20,12 @@ public class Project
     /// </summary>
     public string RepositorySlug { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// Personal access token for the code host (e.g. GitHub PAT).
+    /// Stored per-project so each project can target a different repository/org.
+    /// </summary>
+    public string GitHubToken { get; private set; } = string.Empty;
+
     public DateTime CreatedAt { get; private set; }
 
     public IReadOnlyCollection<Feature> Features => _features.AsReadOnly();
@@ -27,7 +33,7 @@ public class Project
 
     private Project() { }
 
-    public static Project Create(string name, string description, string config, string repositorySlug)
+    public static Project Create(string name, string description, string config, string repositorySlug, string gitHubToken)
     {
         return new Project
         {
@@ -36,6 +42,7 @@ public class Project
             Description = description,
             Config = config,
             RepositorySlug = repositorySlug,
+            GitHubToken = gitHubToken,
             CreatedAt = DateTime.UtcNow
         };
     }

@@ -32,7 +32,8 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
                 "Test Project",
                 "A project for integration testing",
                 "project:\n  name: test-project\nstack:\n  backend: .NET",
-                "test-owner/test-repo");
+                "test-owner/test-repo",
+                "fake-token");
             projectId = project.Id;
 
             var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
@@ -144,7 +145,8 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
                 "Task Pipeline Project",
                 "A project for task agent testing",
                 "project:\n  name: task-test\nstack:\n  backend: .NET",
-                "test-owner/task-test-repo");
+                "test-owner/task-test-repo",
+                "fake-token");
             projectId = project.Id;
 
             var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
@@ -264,7 +266,8 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
                 "Code Pipeline Project",
                 "A project for code agent testing",
                 "project:\n  name: code-test\nstack:\n  backend: .NET",
-                "test-owner/code-test-repo");
+                "test-owner/code-test-repo",
+                "fake-token");
             projectId = project.Id;
 
             var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
@@ -401,7 +404,8 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
                 "QA Pipeline Project",
                 "A project for QA agent testing",
                 "project:\n  name: qa-test\nstack:\n  backend: .NET",
-                "test-owner/qa-test-repo");
+                "test-owner/qa-test-repo",
+                "fake-token");
             projectId = project.Id;
 
             var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
@@ -536,7 +540,8 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
                 "DevOps Pipeline Project",
                 "A project for DevOps agent testing",
                 "project:\n  name: devops-test\nstack:\n  backend: .NET\ndeployment:\n  target: Railway",
-                "test-owner/devops-test-repo");
+                "test-owner/devops-test-repo",
+                "fake-token");
             projectId = project.Id;
 
             var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
@@ -704,7 +709,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         {
             var projectManager = scope.ServiceProvider.GetRequiredService<ProjectManager>();
             var project = await projectManager.CreateAsync(
-                "Wrong Status Project", "test", "config: test", "test/wrong-status");
+                "Wrong Status Project", "test", "config: test", "test/wrong-status", "fake-token");
 
             var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
             var feature = await featureManager.CreateAsync(project.Id, "Some feature");
@@ -740,7 +745,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         {
             var projectManager = scope.ServiceProvider.GetRequiredService<ProjectManager>();
             var project = await projectManager.CreateAsync(
-                "Double Approve Project", "test", "config: test", "test/double-approve");
+                "Double Approve Project", "test", "config: test", "test/double-approve", "fake-token");
 
             var featureManager = scope.ServiceProvider.GetRequiredService<FeatureManager>();
             var feature = await featureManager.CreateAsync(project.Id, "Double approve test");

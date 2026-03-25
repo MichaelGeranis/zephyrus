@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using Octokit;
 using Zephyrus.Core.Interfaces;
 
@@ -11,11 +10,11 @@ public sealed class GitHubCodeHost : ICodeHost
 {
     private readonly GitHubClient _client;
 
-    public GitHubCodeHost(IOptions<GitHubCodeHostOptions> options)
+    public GitHubCodeHost(string token)
     {
         _client = new GitHubClient(new ProductHeaderValue("Zephyrus"))
         {
-            Credentials = new Credentials(options.Value.Token)
+            Credentials = new Credentials(token)
         };
     }
 

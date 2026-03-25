@@ -18,7 +18,7 @@ public sealed class InvokeDevOpsAgentUseCase
     private readonly IProjectRepository _projectRepository;
     private readonly IArtifactRepository _artifactRepository;
     private readonly IAgent<DevOpsAgentInput, DevOpsAgentOutput> _devOpsAgent;
-    private readonly ICodeHost _codeHost;
+    private readonly ICodeHostFactory _codeHostFactory;
     private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeDevOpsAgentUseCase(
@@ -26,14 +26,14 @@ public sealed class InvokeDevOpsAgentUseCase
         IProjectRepository projectRepository,
         IArtifactRepository artifactRepository,
         IAgent<DevOpsAgentInput, DevOpsAgentOutput> devOpsAgent,
-        ICodeHost codeHost,
+        ICodeHostFactory codeHostFactory,
         IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
         _artifactRepository = artifactRepository;
         _devOpsAgent = devOpsAgent;
-        _codeHost = codeHost;
+        _codeHostFactory = codeHostFactory;
         _agentInvocationRepository = agentInvocationRepository;
     }
 
@@ -79,7 +79,8 @@ public sealed class InvokeDevOpsAgentUseCase
         await _artifactRepository.AddAsync(artifact, ct);
 
         // Commit workflow file to main
-        await _codeHost.CommitFileAsync(
+        var codeHost = _codeHostFactory.Create(project.GitHubToken);
+        await codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
             artifact.RepositoryPath,
