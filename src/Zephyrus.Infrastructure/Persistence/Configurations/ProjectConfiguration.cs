@@ -25,7 +25,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(p => p.Config)
             .HasColumnName("config")
-            .HasColumnType("jsonb")
+            .HasColumnType("text")
             .IsRequired();
 
         builder.Property(p => p.RepositorySlug)

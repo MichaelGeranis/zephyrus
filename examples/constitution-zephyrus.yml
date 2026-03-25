@@ -1,0 +1,46 @@
+project:
+  name: zephyrus
+  description: "AI-powered software delivery platform that orchestrates the journey from idea to production through specialized AI agents with human validation at every gate."
+
+stack:
+  frontend: "Next.js 15 + TypeScript"
+  backend: "ASP.NET Core 8 + C#"
+  database: "PostgreSQL 15"
+  orm: "Entity Framework Core 8"
+  css: "Tailwind CSS 4"
+  ai: "Claude API (claude-sonnet-4-20250514)"
+  github: "Octokit.net 13"
+  testing: "xUnit 2.9 + SQLite in-memory"
+
+conventions:
+  architecture: "Clean Architecture (4 layers: Core, Application, Infrastructure, Api)"
+  linting: "dotnet format (backend), ESLint + Prettier (frontend)"
+  testing: "xUnit (backend), Jest (frontend)"
+  branch_strategy: "feature branches → main (squash merge)"
+  commit_style: "conventional commits (feat, fix, docs, refactor, test, chore)"
+  pr_template: true
+  code_coverage: "80% minimum"
+
+architecture:
+  patterns:
+    - "Repository pattern for data access"
+    - "Factory pattern for per-project service creation (ICodeHostFactory)"
+    - "State machine for pipeline transitions (PipelineStateMachine)"
+    - "Use case pattern for orchestration (one class per business operation)"
+    - "Stateless agents — all state in DB and GitHub"
+  api_style: "REST + JSON"
+  auth: "none (pre-alpha)"
+  layers:
+    core: "Entities, interfaces, enums, state machine, agent input/output records — zero NuGet packages"
+    application: "Use cases, managers, orchestrator — depends only on Core"
+    infrastructure: "EF Core, Octokit, Claude API, agent implementations — implements Core interfaces"
+    api: "Controllers, DTOs, DI wiring, middleware — thin HTTP layer"
+    web: "Next.js presentation — no business logic, renders API responses only"
+
+deployment:
+  target: "Railway"
+  trigger: "merge to main"
+  environment_variables:
+    - DATABASE_URL
+    - CLAUDE_API_KEY
+    - GITHUB_TOKEN
