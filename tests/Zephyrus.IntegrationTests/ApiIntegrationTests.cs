@@ -144,7 +144,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
 
         var artifact = await Deserialize<ArtifactDto>(response);
         Assert.Equal("Prd", artifact.Type);
-        Assert.Contains("prd-", artifact.RepositoryPath);
+        Assert.StartsWith("docs/prd/", artifact.RepositoryPath);
         Assert.Null(artifact.ApprovedBy);
 
         // Feature should now be PrdPending

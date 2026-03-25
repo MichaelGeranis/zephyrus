@@ -32,12 +32,9 @@ public sealed class PrdAgent : IAgent<PrdAgentInput, PrdAgentOutput>
 
         var markdown = await _languageModel.GenerateAsync(systemPrompt, userMessage, ct);
 
-        var repoPath = $"docs/prd-{input.FeatureSlug}.md";
-
         return new PrdAgentOutput
         {
             Markdown = markdown,
-            RepositoryPath = repoPath,
             SystemPrompt = systemPrompt,
             UserMessage = userMessage,
             RawResponse = markdown

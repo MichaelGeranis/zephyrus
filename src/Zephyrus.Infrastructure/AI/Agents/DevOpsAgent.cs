@@ -38,12 +38,9 @@ public sealed class DevOpsAgent : IAgent<DevOpsAgentInput, DevOpsAgentOutput>
 
         var workflowYaml = ParseOutput(json);
 
-        var repoPath = ".github/workflows/deploy.yml";
-
         return new DevOpsAgentOutput
         {
             WorkflowYaml = workflowYaml,
-            RepositoryPath = repoPath,
             SystemPrompt = systemPrompt,
             UserMessage = userMessage,
             RawResponse = json

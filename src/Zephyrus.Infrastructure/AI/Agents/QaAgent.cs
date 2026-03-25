@@ -44,13 +44,10 @@ public sealed class QaAgent : IAgent<QaAgentInput, QaAgentOutput>
 
         var (testFiles, report) = ParseOutput(json);
 
-        var repoPath = $"docs/qa-report-{input.FeatureSlug}.md";
-
         return new QaAgentOutput
         {
             TestFiles = testFiles,
             ReportMarkdown = report,
-            RepositoryPath = repoPath,
             SystemPrompt = systemPrompt,
             UserMessage = userMessage,
             RawResponse = json

@@ -75,16 +75,6 @@ public class DevOpsAgentTests
     }
 
     [Fact]
-    public async Task RunAsync_WhenCalled_ShouldSetRepositoryPathToWorkflowFile()
-    {
-        var (agent, _, _) = CreateAgent(ValidDevOpsJson());
-
-        var output = await agent.RunAsync(BuildInput());
-
-        Assert.Equal(".github/workflows/deploy.yml", output.RepositoryPath);
-    }
-
-    [Fact]
     public async Task RunAsync_WhenJsonWrappedInCodeFences_ShouldStillParseOutput()
     {
         var json = "```json\n" + ValidDevOpsJson() + "\n```";

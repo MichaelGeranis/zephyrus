@@ -87,18 +87,18 @@ public sealed class InvokeArchitectAgentUseCase
                 agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
                 (int)stopwatch.ElapsedMilliseconds), ct);
 
+        // Record artifact (generates GUID used for the file path)
+        var artifact = Artifact.Create(featureId, ArtifactType.Adr);
+        await _artifactRepository.AddAsync(artifact, ct);
+
         // Commit ADR to repository
         await _codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
-            agentOutput.RepositoryPath,
+            artifact.RepositoryPath,
             agentOutput.Markdown,
             $"[Zephyrus] Add ADR for {featureSlug}",
             ct);
-
-        // Record artifact
-        var artifact = Artifact.Create(featureId, ArtifactType.Adr, agentOutput.RepositoryPath);
-        await _artifactRepository.AddAsync(artifact, ct);
 
         return artifact;
     }

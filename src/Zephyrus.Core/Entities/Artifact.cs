@@ -24,15 +24,34 @@ public class Artifact
 
     private Artifact() { }
 
-    public static Artifact Create(Guid featureId, ArtifactType type, string repositoryPath)
+    public static Artifact Create(Guid featureId, ArtifactType type)
     {
+        var id = Guid.NewGuid();
         return new Artifact
         {
-            Id = Guid.NewGuid(),
+            Id = id,
             FeatureId = featureId,
             Type = type,
-            RepositoryPath = repositoryPath
+            RepositoryPath = BuildRepositoryPath(type, id)
         };
+    }
+
+    public static string BuildRepositoryPath(ArtifactType type, Guid artifactId)
+    {
+        var folder = type switch
+        {
+            ArtifactType.Prd => "docs/prd",
+            ArtifactType.Adr => "docs/adr",
+            ArtifactType.Task => "docs/tasks",
+            ArtifactType.Test => "docs/qa",
+            ArtifactType.Pr => "pulls",
+            ArtifactType.Workflow => ".github/workflows",
+            _ => "docs"
+        };
+
+        var extension = type == ArtifactType.Workflow ? ".yml" : ".md";
+
+        return $"{folder}/{artifactId}{extension}";
     }
 
     /// <summary>

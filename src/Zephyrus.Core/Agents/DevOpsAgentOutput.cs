@@ -6,7 +6,6 @@ namespace Zephyrus.Core.Agents;
 public sealed class DevOpsAgentOutput
 {
     public required string WorkflowYaml { get; init; }
-    public required string RepositoryPath { get; init; }
     public required string SystemPrompt { get; init; }
     public required string UserMessage { get; init; }
     public required string RawResponse { get; init; }

@@ -114,17 +114,6 @@ public class QaAgentTests
     }
 
     [Fact]
-    public async Task RunAsync_WhenCalled_ShouldSetRepositoryPathUsingSlug()
-    {
-        var (agent, _, _) = CreateAgent(ValidQaJson());
-        var input = BuildInput(featureSlug: "add-user-auth");
-
-        var output = await agent.RunAsync(input);
-
-        Assert.Equal("docs/qa-report-add-user-auth.md", output.RepositoryPath);
-    }
-
-    [Fact]
     public async Task RunAsync_WhenJsonWrappedInCodeFences_ShouldStillParseOutput()
     {
         var json = "```json\n" + ValidQaJson(1) + "\n```";

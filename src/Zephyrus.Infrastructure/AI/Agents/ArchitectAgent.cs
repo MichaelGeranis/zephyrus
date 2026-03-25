@@ -32,12 +32,9 @@ public sealed class ArchitectAgent : IAgent<ArchitectAgentInput, ArchitectAgentO
 
         var markdown = await _languageModel.GenerateAsync(systemPrompt, userMessage, ct);
 
-        var repoPath = $"docs/adr-{input.FeatureSlug}.md";
-
         return new ArchitectAgentOutput
         {
             Markdown = markdown,
-            RepositoryPath = repoPath,
             SystemPrompt = systemPrompt,
             UserMessage = userMessage,
             RawResponse = markdown

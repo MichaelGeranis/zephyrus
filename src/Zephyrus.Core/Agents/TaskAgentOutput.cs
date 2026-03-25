@@ -8,7 +8,6 @@ namespace Zephyrus.Core.Agents;
 public sealed class TaskAgentOutput
 {
     public required string Markdown { get; init; }
-    public required string RepositoryPath { get; init; }
     public required IReadOnlyList<TaskDefinition> Tasks { get; init; }
     public required string SystemPrompt { get; init; }
     public required string UserMessage { get; init; }

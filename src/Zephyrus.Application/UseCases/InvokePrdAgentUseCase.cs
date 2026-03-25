@@ -77,18 +77,18 @@ public sealed class InvokePrdAgentUseCase
                 agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
                 (int)stopwatch.ElapsedMilliseconds), ct);
 
+        // Record artifact (generates GUID used for the file path)
+        var artifact = Artifact.Create(featureId, ArtifactType.Prd);
+        await _artifactRepository.AddAsync(artifact, ct);
+
         // Commit PRD to repository
         await _codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
-            agentOutput.RepositoryPath,
+            artifact.RepositoryPath,
             agentOutput.Markdown,
             $"[Zephyrus] Add PRD for {featureSlug}",
             ct);
-
-        // Record artifact
-        var artifact = Artifact.Create(featureId, ArtifactType.Prd, agentOutput.RepositoryPath);
-        await _artifactRepository.AddAsync(artifact, ct);
 
         return artifact;
     }

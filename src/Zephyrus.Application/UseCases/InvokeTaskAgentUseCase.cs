@@ -115,18 +115,18 @@ public sealed class InvokeTaskAgentUseCase
             await _taskItemRepository.AddAsync(taskItem, ct);
         }
 
+        // Record artifact (generates GUID used for the file path)
+        var artifact = Artifact.Create(featureId, ArtifactType.Task);
+        await _artifactRepository.AddAsync(artifact, ct);
+
         // Commit task summary to repository
         await _codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
-            agentOutput.RepositoryPath,
+            artifact.RepositoryPath,
             agentOutput.Markdown,
             $"[Zephyrus] Add task breakdown for {featureSlug}",
             ct);
-
-        // Record artifact
-        var artifact = Artifact.Create(featureId, ArtifactType.Task, agentOutput.RepositoryPath);
-        await _artifactRepository.AddAsync(artifact, ct);
 
         return artifact;
     }

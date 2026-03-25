@@ -93,17 +93,6 @@ public class TaskAgentTests
     }
 
     [Fact]
-    public async Task RunAsync_WhenValidJson_ShouldSetRepositoryPathUsingSlug()
-    {
-        var (agent, _, _) = CreateAgent(ValidTaskJson());
-        var input = BuildInput(featureSlug: "add-user-auth");
-
-        var output = await agent.RunAsync(input);
-
-        Assert.Equal("docs/tasks-add-user-auth.md", output.RepositoryPath);
-    }
-
-    [Fact]
     public async Task RunAsync_WhenJsonWrappedInCodeFences_ShouldStillParseTasks()
     {
         var json = "```json\n" + ValidTaskJson(1) + "\n```";

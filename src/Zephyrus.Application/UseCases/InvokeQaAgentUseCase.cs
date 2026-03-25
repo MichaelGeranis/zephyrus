@@ -108,18 +108,18 @@ public sealed class InvokeQaAgentUseCase
                 ct);
         }
 
+        // Record Test artifact (generates GUID used for the file path)
+        var artifact = Artifact.Create(featureId, ArtifactType.Test);
+        await _artifactRepository.AddAsync(artifact, ct);
+
         // Commit QA report to main
         await _codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
-            agentOutput.RepositoryPath,
+            artifact.RepositoryPath,
             agentOutput.ReportMarkdown,
             $"[Zephyrus] Add QA report for {featureSlug}",
             ct);
-
-        // Record Test artifact
-        var artifact = Artifact.Create(featureId, ArtifactType.Test, agentOutput.RepositoryPath);
-        await _artifactRepository.AddAsync(artifact, ct);
 
         return artifact;
     }

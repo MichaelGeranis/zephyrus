@@ -53,7 +53,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             prdArtifactId = prdArtifact.Id;
 
             Assert.Equal(ArtifactType.Prd, prdArtifact.Type);
-            Assert.Contains("prd-", prdArtifact.RepositoryPath);
+            Assert.StartsWith("docs/prd/", prdArtifact.RepositoryPath);
         }
 
         // --- Assert 1: Feature is now PrdPending, PRD committed to fake repo ---
@@ -66,7 +66,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             Assert.Equal(FeatureStatus.PrdPending, feature!.Status);
         }
 
-        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/prd-")),
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/prd/")),
             "PRD should be committed to the fake code host");
 
         Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("PRD Agent"));
@@ -97,7 +97,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("Architect Agent"));
 
         // ADR was committed to fake repo
-        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/adr-")),
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/adr/")),
             "ADR should be committed to the fake code host");
 
         // ADR artifact was recorded
@@ -107,7 +107,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             var adrArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Adr);
 
             Assert.NotNull(adrArtifact);
-            Assert.Contains("adr-", adrArtifact!.RepositoryPath);
+            Assert.StartsWith("docs/adr/", adrArtifact!.RepositoryPath);
         }
 
         // Pipeline events were recorded
@@ -200,7 +200,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         Assert.Contains(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("Task Agent"));
 
         // Task summary was committed to fake repo
-        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/tasks-")),
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/tasks/")),
             "Task breakdown should be committed to the fake code host");
 
         // Task artifact was recorded
@@ -210,7 +210,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             var taskArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Task);
 
             Assert.NotNull(taskArtifact);
-            Assert.Contains("tasks-", taskArtifact!.RepositoryPath);
+            Assert.StartsWith("docs/tasks/", taskArtifact!.RepositoryPath);
         }
 
         // GitHub Issues were created (3 tasks in the fake response)
@@ -485,7 +485,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         Assert.Contains(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("QA Agent"));
 
         // QA report was committed
-        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/qa-report-")),
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith("docs/qa/")),
             "QA report should be committed to the fake code host");
 
         // Test files were committed
@@ -499,7 +499,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             var testArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Test);
 
             Assert.NotNull(testArtifact);
-            Assert.Contains("qa-report-", testArtifact!.RepositoryPath);
+            Assert.StartsWith("docs/qa/", testArtifact!.RepositoryPath);
         }
 
         // Pipeline events: 8 transitions
@@ -634,7 +634,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         Assert.Single(_fixture.LanguageModel.Calls, c => c.SystemPrompt.Contains("DevOps Agent"));
 
         // Workflow file was committed
-        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path == ".github/workflows/deploy.yml"),
+        Assert.True(_fixture.CodeHost.Files.Any(f => f.Key.Path.StartsWith(".github/workflows/")),
             "Workflow file should be committed to the fake code host");
 
         // Workflow artifact was recorded
@@ -644,7 +644,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             var workflowArtifact = await artifactRepo.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Workflow);
 
             Assert.NotNull(workflowArtifact);
-            Assert.Equal(".github/workflows/deploy.yml", workflowArtifact!.RepositoryPath);
+            Assert.StartsWith(".github/workflows/", workflowArtifact!.RepositoryPath);
         }
 
         // --- Act 2: Approve Workflow artifact → feature advances to Deployed ---
@@ -712,7 +712,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
 
             // Manually add a PRD artifact (simulating it exists but feature is still in Ideation)
             var artifactRepo = scope.ServiceProvider.GetRequiredService<IArtifactRepository>();
-            var artifact = Artifact.Create(featureId, ArtifactType.Prd, "docs/prd-test.md");
+            var artifact = Artifact.Create(featureId, ArtifactType.Prd);
             await artifactRepo.AddAsync(artifact);
             artifactId = artifact.Id;
         }

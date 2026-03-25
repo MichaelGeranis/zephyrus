@@ -59,17 +59,6 @@ public class ArchitectAgentTests
         Assert.Equal(AdrMarkdown, output.Markdown);
     }
 
-    [Fact]
-    public async Task RunAsync_WhenCalled_ShouldSetRepositoryPathUsingSlug()
-    {
-        var (agent, _, _) = CreateAgent();
-        var input = BuildInput(featureSlug: "add-user-auth");
-
-        var output = await agent.RunAsync(input);
-
-        Assert.Equal("docs/adr-add-user-auth.md", output.RepositoryPath);
-    }
-
     private static ArchitectAgentInput BuildInput(string featureSlug = "test-feature") =>
         new()
         {

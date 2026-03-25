@@ -61,17 +61,6 @@ public class PrdAgentTests
         Assert.Equal(PrdMarkdown, output.Markdown);
     }
 
-    [Fact]
-    public async Task RunAsync_WhenCalled_ShouldSetRepositoryPathUsingSlug()
-    {
-        var (agent, _, _) = CreateAgent();
-        var input = BuildInput(featureSlug: "add-user-auth");
-
-        var output = await agent.RunAsync(input);
-
-        Assert.Equal("docs/prd-add-user-auth.md", output.RepositoryPath);
-    }
-
     private static PrdAgentInput BuildInput(string featureSlug = "test-feature") =>
         new()
         {

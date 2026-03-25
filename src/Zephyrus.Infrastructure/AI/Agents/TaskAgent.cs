@@ -39,15 +39,12 @@ public sealed class TaskAgent : IAgent<TaskAgentInput, TaskAgentOutput>
 
         var tasks = ParseTasks(json);
 
-        var repoPath = $"docs/tasks-{input.FeatureSlug}.md";
-
         // Build a human-readable markdown summary of the task breakdown
         var markdown = BuildMarkdown(input.FeatureSlug, tasks);
 
         return new TaskAgentOutput
         {
             Markdown = markdown,
-            RepositoryPath = repoPath,
             Tasks = tasks,
             SystemPrompt = systemPrompt,
             UserMessage = userMessage,

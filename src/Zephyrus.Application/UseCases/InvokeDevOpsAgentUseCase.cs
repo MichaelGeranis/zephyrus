@@ -74,18 +74,18 @@ public sealed class InvokeDevOpsAgentUseCase
                 agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
                 (int)stopwatch.ElapsedMilliseconds), ct);
 
+        // Record Workflow artifact (generates GUID used for the file path)
+        var artifact = Artifact.Create(featureId, ArtifactType.Workflow);
+        await _artifactRepository.AddAsync(artifact, ct);
+
         // Commit workflow file to main
         await _codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
-            agentOutput.RepositoryPath,
+            artifact.RepositoryPath,
             agentOutput.WorkflowYaml,
             $"[Zephyrus] Add CI/CD workflow for {featureSlug}",
             ct);
-
-        // Record Workflow artifact
-        var artifact = Artifact.Create(featureId, ArtifactType.Workflow, agentOutput.RepositoryPath);
-        await _artifactRepository.AddAsync(artifact, ct);
 
         return artifact;
     }

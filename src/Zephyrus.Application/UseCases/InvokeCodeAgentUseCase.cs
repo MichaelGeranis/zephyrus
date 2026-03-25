@@ -134,10 +134,7 @@ public sealed class InvokeCodeAgentUseCase
         }
 
         // Record a single Pr artifact for the feature
-        var artifact = Artifact.Create(
-            featureId,
-            ArtifactType.Pr,
-            $"pulls/feature-{featureSlug}");
+        var artifact = Artifact.Create(featureId, ArtifactType.Pr);
         await _artifactRepository.AddAsync(artifact, ct);
     }
 
