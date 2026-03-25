@@ -37,7 +37,10 @@ public sealed class ArchitectAgent : IAgent<ArchitectAgentInput, ArchitectAgentO
         return new ArchitectAgentOutput
         {
             Markdown = markdown,
-            RepositoryPath = repoPath
+            RepositoryPath = repoPath,
+            SystemPrompt = systemPrompt,
+            UserMessage = userMessage,
+            RawResponse = markdown
         };
     }
 }

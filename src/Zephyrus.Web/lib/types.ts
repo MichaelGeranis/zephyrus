@@ -42,6 +42,20 @@ export interface PipelineEvent {
   timestamp: string;
 }
 
+export interface AgentInvocationSummary {
+  id: string;
+  featureId: string;
+  agentName: string;
+  invokedAt: string;
+  durationMs: number;
+}
+
+export interface AgentInvocationDetail extends AgentInvocationSummary {
+  systemPrompt: string;
+  userMessage: string;
+  response: string;
+}
+
 export const PIPELINE_STAGES = [
   "Ideation",
   "PrdPending",

@@ -37,7 +37,10 @@ public sealed class PrdAgent : IAgent<PrdAgentInput, PrdAgentOutput>
         return new PrdAgentOutput
         {
             Markdown = markdown,
-            RepositoryPath = repoPath
+            RepositoryPath = repoPath,
+            SystemPrompt = systemPrompt,
+            UserMessage = userMessage,
+            RawResponse = markdown
         };
     }
 }

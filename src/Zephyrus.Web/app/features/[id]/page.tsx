@@ -6,7 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { StatusBadge, PipelineProgress } from "@/components/StatusBadge";
 import { APPROVABLE_STATUSES, STAGE_LABELS } from "@/lib/types";
-import type { Feature, Artifact, TaskItem, PipelineEvent } from "@/lib/types";
+import type { Feature, Artifact, TaskItem, PipelineEvent, AgentInvocationSummary } from "@/lib/types";
 
 export default function FeatureDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +14,7 @@ export default function FeatureDetailPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [events, setEvents] = useState<PipelineEvent[]>([]);
+  const [invocations, setInvocations] = useState<AgentInvocationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,12 +25,14 @@ export default function FeatureDetailPage() {
       api.getArtifacts(id),
       api.getTasks(id),
       api.getPipelineEvents(id),
+      api.getAgentInvocations(id),
     ])
-      .then(([f, a, t, e]) => {
+      .then(([f, a, t, e, inv]) => {
         setFeature(f);
         setArtifacts(a);
         setTasks(t);
         setEvents(e);
+        setInvocations(inv);
       })
       .finally(() => setLoading(false));
   }
@@ -174,6 +177,36 @@ export default function FeatureDetailPage() {
                 >
                   {task.status}
                 </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Agent Invocations */}
+      {invocations.length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Agent Invocations</h2>
+          <div className="grid gap-2 mb-6">
+            {invocations.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900 capitalize">
+                    {inv.agentName} Agent
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {new Date(inv.invokedAt).toLocaleString()} &middot; {inv.durationMs}ms
+                  </p>
+                </div>
+                <Link
+                  href={`/features/${id}/invocations/${inv.id}`}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  View Prompts
+                </Link>
               </div>
             ))}
           </div>

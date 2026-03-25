@@ -48,7 +48,10 @@ public sealed class TaskAgent : IAgent<TaskAgentInput, TaskAgentOutput>
         {
             Markdown = markdown,
             RepositoryPath = repoPath,
-            Tasks = tasks
+            Tasks = tasks,
+            SystemPrompt = systemPrompt,
+            UserMessage = userMessage,
+            RawResponse = json
         };
     }
 

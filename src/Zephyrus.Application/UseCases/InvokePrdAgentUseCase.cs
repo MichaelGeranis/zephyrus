@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
@@ -17,6 +18,7 @@ public sealed class InvokePrdAgentUseCase
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly IAgent<PrdAgentInput, PrdAgentOutput> _prdAgent;
     private readonly ICodeHost _codeHost;
+    private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokePrdAgentUseCase(
         IFeatureRepository featureRepository,
@@ -24,7 +26,8 @@ public sealed class InvokePrdAgentUseCase
         IArtifactRepository artifactRepository,
         IPipelineEventRepository pipelineEventRepository,
         IAgent<PrdAgentInput, PrdAgentOutput> prdAgent,
-        ICodeHost codeHost)
+        ICodeHost codeHost,
+        IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
@@ -32,6 +35,7 @@ public sealed class InvokePrdAgentUseCase
         _pipelineEventRepository = pipelineEventRepository;
         _prdAgent = prdAgent;
         _codeHost = codeHost;
+        _agentInvocationRepository = agentInvocationRepository;
     }
 
     public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
@@ -64,7 +68,14 @@ public sealed class InvokePrdAgentUseCase
             FeatureSlug = featureSlug
         };
 
+        var stopwatch = Stopwatch.StartNew();
         var agentOutput = await _prdAgent.RunAsync(agentInput, ct);
+        stopwatch.Stop();
+
+        await _agentInvocationRepository.AddAsync(
+            AgentInvocation.Create(featureId, "prd",
+                agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
+                (int)stopwatch.ElapsedMilliseconds), ct);
 
         // Commit PRD to repository
         await _codeHost.CommitFileAsync(

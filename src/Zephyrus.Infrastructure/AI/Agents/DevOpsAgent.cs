@@ -43,7 +43,10 @@ public sealed class DevOpsAgent : IAgent<DevOpsAgentInput, DevOpsAgentOutput>
         return new DevOpsAgentOutput
         {
             WorkflowYaml = workflowYaml,
-            RepositoryPath = repoPath
+            RepositoryPath = repoPath,
+            SystemPrompt = systemPrompt,
+            UserMessage = userMessage,
+            RawResponse = json
         };
     }
 

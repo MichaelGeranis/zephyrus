@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
@@ -19,6 +20,7 @@ public sealed class InvokeCodeAgentUseCase
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly IAgent<CodeAgentInput, CodeAgentOutput> _codeAgent;
     private readonly ICodeHost _codeHost;
+    private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeCodeAgentUseCase(
         IFeatureRepository featureRepository,
@@ -27,7 +29,8 @@ public sealed class InvokeCodeAgentUseCase
         ITaskItemRepository taskItemRepository,
         IPipelineEventRepository pipelineEventRepository,
         IAgent<CodeAgentInput, CodeAgentOutput> codeAgent,
-        ICodeHost codeHost)
+        ICodeHost codeHost,
+        IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
@@ -36,6 +39,7 @@ public sealed class InvokeCodeAgentUseCase
         _pipelineEventRepository = pipelineEventRepository;
         _codeAgent = codeAgent;
         _codeHost = codeHost;
+        _agentInvocationRepository = agentInvocationRepository;
     }
 
     public async Task ExecuteAsync(Guid featureId, CancellationToken ct = default)
@@ -96,7 +100,14 @@ public sealed class InvokeCodeAgentUseCase
                 BranchName = branchName
             };
 
+            var stopwatch = Stopwatch.StartNew();
             var agentOutput = await _codeAgent.RunAsync(agentInput, ct);
+            stopwatch.Stop();
+
+            await _agentInvocationRepository.AddAsync(
+                AgentInvocation.Create(featureId, "code",
+                    agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
+                    (int)stopwatch.ElapsedMilliseconds), ct);
 
             // Commit generated files to the feature branch
             foreach (var file in agentOutput.Files)

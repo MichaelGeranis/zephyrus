@@ -44,7 +44,10 @@ public sealed class CodeAgent : IAgent<CodeAgentInput, CodeAgentOutput>
 
         return new CodeAgentOutput
         {
-            Files = files
+            Files = files,
+            SystemPrompt = systemPrompt,
+            UserMessage = userMessage,
+            RawResponse = json
         };
     }
 

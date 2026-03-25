@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IArtifactRepository, ArtifactRepository>();
         services.AddScoped<ITaskItemRepository, TaskItemRepository>();
         services.AddScoped<IPipelineEventRepository, PipelineEventRepository>();
+        services.AddScoped<IAgentInvocationRepository, AgentInvocationRepository>();
 
         // GitHub
         services.Configure<GitHubCodeHostOptions>(configuration.GetSection(GitHubCodeHostOptions.SectionName));

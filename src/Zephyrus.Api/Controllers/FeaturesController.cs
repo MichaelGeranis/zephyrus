@@ -70,6 +70,34 @@ public class FeaturesController : ControllerBase
         return Ok(events.Select(e => new PipelineEventResponse(e)));
     }
 
+    [HttpGet("{id:guid}/agent-invocations")]
+    public async Task<IActionResult> GetAgentInvocations(
+        Guid id,
+        [FromServices] IAgentInvocationRepository agentInvocationRepository,
+        CancellationToken ct)
+    {
+        var feature = await _featureManager.GetByIdAsync(id, ct);
+        if (feature is null)
+            return NotFound();
+
+        var invocations = await agentInvocationRepository.GetByFeatureIdAsync(id, ct);
+        return Ok(invocations.Select(i => new AgentInvocationSummaryResponse(i)));
+    }
+
+    [HttpGet("{id:guid}/agent-invocations/{invocationId:guid}")]
+    public async Task<IActionResult> GetAgentInvocationDetail(
+        Guid id,
+        Guid invocationId,
+        [FromServices] IAgentInvocationRepository agentInvocationRepository,
+        CancellationToken ct)
+    {
+        var invocation = await agentInvocationRepository.GetByIdAsync(invocationId, ct);
+        if (invocation is null || invocation.FeatureId != id)
+            return NotFound();
+
+        return Ok(new AgentInvocationDetailResponse(invocation));
+    }
+
     [HttpPost("{id:guid}/generate-prd")]
     public async Task<IActionResult> GeneratePrd(
         Guid id,
@@ -114,6 +142,31 @@ public record PipelineEventResponse(
 {
     public PipelineEventResponse(PipelineEvent e)
         : this(e.Id, e.FeatureId, e.FromStatus.ToString(), e.ToStatus.ToString(), e.TriggeredBy, e.Timestamp) { }
+}
+
+public record AgentInvocationSummaryResponse(
+    Guid Id,
+    Guid FeatureId,
+    string AgentName,
+    DateTime InvokedAt,
+    int DurationMs)
+{
+    public AgentInvocationSummaryResponse(AgentInvocation i)
+        : this(i.Id, i.FeatureId, i.AgentName, i.InvokedAt, i.DurationMs) { }
+}
+
+public record AgentInvocationDetailResponse(
+    Guid Id,
+    Guid FeatureId,
+    string AgentName,
+    string SystemPrompt,
+    string UserMessage,
+    string Response,
+    DateTime InvokedAt,
+    int DurationMs)
+{
+    public AgentInvocationDetailResponse(AgentInvocation i)
+        : this(i.Id, i.FeatureId, i.AgentName, i.SystemPrompt, i.UserMessage, i.Response, i.InvokedAt, i.DurationMs) { }
 }
 
 public record TaskItemResponse(

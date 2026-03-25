@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
@@ -19,6 +20,7 @@ public sealed class InvokeQaAgentUseCase
     private readonly ITaskItemRepository _taskItemRepository;
     private readonly IAgent<QaAgentInput, QaAgentOutput> _qaAgent;
     private readonly ICodeHost _codeHost;
+    private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeQaAgentUseCase(
         IFeatureRepository featureRepository,
@@ -26,7 +28,8 @@ public sealed class InvokeQaAgentUseCase
         IArtifactRepository artifactRepository,
         ITaskItemRepository taskItemRepository,
         IAgent<QaAgentInput, QaAgentOutput> qaAgent,
-        ICodeHost codeHost)
+        ICodeHost codeHost,
+        IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
@@ -34,6 +37,7 @@ public sealed class InvokeQaAgentUseCase
         _taskItemRepository = taskItemRepository;
         _qaAgent = qaAgent;
         _codeHost = codeHost;
+        _agentInvocationRepository = agentInvocationRepository;
     }
 
     public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
@@ -82,7 +86,14 @@ public sealed class InvokeQaAgentUseCase
             Tasks = taskContexts
         };
 
+        var stopwatch = Stopwatch.StartNew();
         var agentOutput = await _qaAgent.RunAsync(agentInput, ct);
+        stopwatch.Stop();
+
+        await _agentInvocationRepository.AddAsync(
+            AgentInvocation.Create(featureId, "qa",
+                agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
+                (int)stopwatch.ElapsedMilliseconds), ct);
 
         // Commit test files to the first task's branch (or main if no branches)
         var targetBranch = taskContexts.Count > 0 ? taskContexts[0].BranchName : "main";

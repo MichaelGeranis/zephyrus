@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
@@ -19,6 +20,7 @@ public sealed class InvokeTaskAgentUseCase
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly IAgent<TaskAgentInput, TaskAgentOutput> _taskAgent;
     private readonly ICodeHost _codeHost;
+    private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeTaskAgentUseCase(
         IFeatureRepository featureRepository,
@@ -27,7 +29,8 @@ public sealed class InvokeTaskAgentUseCase
         ITaskItemRepository taskItemRepository,
         IPipelineEventRepository pipelineEventRepository,
         IAgent<TaskAgentInput, TaskAgentOutput> taskAgent,
-        ICodeHost codeHost)
+        ICodeHost codeHost,
+        IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
@@ -36,6 +39,7 @@ public sealed class InvokeTaskAgentUseCase
         _pipelineEventRepository = pipelineEventRepository;
         _taskAgent = taskAgent;
         _codeHost = codeHost;
+        _agentInvocationRepository = agentInvocationRepository;
     }
 
     public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
@@ -87,7 +91,14 @@ public sealed class InvokeTaskAgentUseCase
             FeatureSlug = featureSlug
         };
 
+        var stopwatch = Stopwatch.StartNew();
         var agentOutput = await _taskAgent.RunAsync(agentInput, ct);
+        stopwatch.Stop();
+
+        await _agentInvocationRepository.AddAsync(
+            AgentInvocation.Create(featureId, "task",
+                agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
+                (int)stopwatch.ElapsedMilliseconds), ct);
 
         // Create GitHub Issues and TaskItems for each task
         foreach (var taskDef in agentOutput.Tasks)

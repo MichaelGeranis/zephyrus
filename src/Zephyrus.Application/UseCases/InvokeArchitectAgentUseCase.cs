@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
@@ -18,6 +19,7 @@ public sealed class InvokeArchitectAgentUseCase
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly IAgent<ArchitectAgentInput, ArchitectAgentOutput> _architectAgent;
     private readonly ICodeHost _codeHost;
+    private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeArchitectAgentUseCase(
         IFeatureRepository featureRepository,
@@ -25,7 +27,8 @@ public sealed class InvokeArchitectAgentUseCase
         IArtifactRepository artifactRepository,
         IPipelineEventRepository pipelineEventRepository,
         IAgent<ArchitectAgentInput, ArchitectAgentOutput> architectAgent,
-        ICodeHost codeHost)
+        ICodeHost codeHost,
+        IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
@@ -33,6 +36,7 @@ public sealed class InvokeArchitectAgentUseCase
         _pipelineEventRepository = pipelineEventRepository;
         _architectAgent = architectAgent;
         _codeHost = codeHost;
+        _agentInvocationRepository = agentInvocationRepository;
     }
 
     public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
@@ -74,7 +78,14 @@ public sealed class InvokeArchitectAgentUseCase
             FeatureSlug = featureSlug
         };
 
+        var stopwatch = Stopwatch.StartNew();
         var agentOutput = await _architectAgent.RunAsync(agentInput, ct);
+        stopwatch.Stop();
+
+        await _agentInvocationRepository.AddAsync(
+            AgentInvocation.Create(featureId, "architect",
+                agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
+                (int)stopwatch.ElapsedMilliseconds), ct);
 
         // Commit ADR to repository
         await _codeHost.CommitFileAsync(

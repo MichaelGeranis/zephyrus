@@ -17,7 +17,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-import type { Project, Feature, Artifact, TaskItem, PipelineEvent } from "./types";
+import type { Project, Feature, Artifact, TaskItem, PipelineEvent, AgentInvocationSummary, AgentInvocationDetail } from "./types";
 
 export const api = {
   // Projects
@@ -57,6 +57,12 @@ export const api = {
   // Pipeline Events
   getPipelineEvents: (featureId: string) =>
     request<PipelineEvent[]>(`/api/features/${featureId}/pipeline-events`),
+
+  // Agent Invocations
+  getAgentInvocations: (featureId: string) =>
+    request<AgentInvocationSummary[]>(`/api/features/${featureId}/agent-invocations`),
+  getAgentInvocationDetail: (featureId: string, invocationId: string) =>
+    request<AgentInvocationDetail>(`/api/features/${featureId}/agent-invocations/${invocationId}`),
 
   // PRD Generation
   generatePrd: (featureId: string) =>

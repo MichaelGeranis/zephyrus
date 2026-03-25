@@ -14,6 +14,7 @@ public class ZephyrusDbContext : DbContext
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
     public DbSet<PipelineEvent> PipelineEvents => Set<PipelineEvent>();
     public DbSet<Deployment> Deployments => Set<Deployment>();
+    public DbSet<AgentInvocation> AgentInvocations => Set<AgentInvocation>();
 
     public ZephyrusDbContext(DbContextOptions<ZephyrusDbContext> options)
         : base(options)

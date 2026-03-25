@@ -50,7 +50,10 @@ public sealed class QaAgent : IAgent<QaAgentInput, QaAgentOutput>
         {
             TestFiles = testFiles,
             ReportMarkdown = report,
-            RepositoryPath = repoPath
+            RepositoryPath = repoPath,
+            SystemPrompt = systemPrompt,
+            UserMessage = userMessage,
+            RawResponse = json
         };
     }
 

@@ -24,11 +24,13 @@ public class Feature
     public IReadOnlyCollection<TaskItem> Tasks => _tasks.AsReadOnly();
     public IReadOnlyCollection<PipelineEvent> PipelineEvents => _pipelineEvents.AsReadOnly();
     public IReadOnlyCollection<Deployment> Deployments => _deployments.AsReadOnly();
+    public IReadOnlyCollection<AgentInvocation> AgentInvocations => _agentInvocations.AsReadOnly();
 
     private readonly List<Artifact> _artifacts = new();
     private readonly List<TaskItem> _tasks = new();
     private readonly List<PipelineEvent> _pipelineEvents = new();
     private readonly List<Deployment> _deployments = new();
+    private readonly List<AgentInvocation> _agentInvocations = new();
 
     private Feature() { }
 

@@ -6,6 +6,9 @@ namespace Zephyrus.Core.Agents;
 public sealed class CodeAgentOutput
 {
     public required IReadOnlyList<GeneratedFile> Files { get; init; }
+    public required string SystemPrompt { get; init; }
+    public required string UserMessage { get; init; }
+    public required string RawResponse { get; init; }
 }
 
 /// <summary>

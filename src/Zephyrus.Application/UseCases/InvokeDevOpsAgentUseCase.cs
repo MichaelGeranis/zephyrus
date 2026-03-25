@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
@@ -18,19 +19,22 @@ public sealed class InvokeDevOpsAgentUseCase
     private readonly IArtifactRepository _artifactRepository;
     private readonly IAgent<DevOpsAgentInput, DevOpsAgentOutput> _devOpsAgent;
     private readonly ICodeHost _codeHost;
+    private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeDevOpsAgentUseCase(
         IFeatureRepository featureRepository,
         IProjectRepository projectRepository,
         IArtifactRepository artifactRepository,
         IAgent<DevOpsAgentInput, DevOpsAgentOutput> devOpsAgent,
-        ICodeHost codeHost)
+        ICodeHost codeHost,
+        IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
         _artifactRepository = artifactRepository;
         _devOpsAgent = devOpsAgent;
         _codeHost = codeHost;
+        _agentInvocationRepository = agentInvocationRepository;
     }
 
     public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
@@ -61,7 +65,14 @@ public sealed class InvokeDevOpsAgentUseCase
             RepositorySlug = project.RepositorySlug
         };
 
+        var stopwatch = Stopwatch.StartNew();
         var agentOutput = await _devOpsAgent.RunAsync(agentInput, ct);
+        stopwatch.Stop();
+
+        await _agentInvocationRepository.AddAsync(
+            AgentInvocation.Create(featureId, "devops",
+                agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
+                (int)stopwatch.ElapsedMilliseconds), ct);
 
         // Commit workflow file to main
         await _codeHost.CommitFileAsync(
