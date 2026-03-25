@@ -33,6 +33,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasMaxLength(512)
             .IsRequired();
 
+        builder.Property(p => p.GitHubToken)
+            .HasColumnName("github_token")
+            .HasMaxLength(512)
+            .IsRequired();
+
         builder.Property(p => p.CreatedAt)
             .HasColumnName("created_at");
 

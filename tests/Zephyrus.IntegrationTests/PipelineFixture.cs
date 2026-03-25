@@ -50,7 +50,7 @@ public sealed class PipelineFixture : IDisposable
         services.AddScoped<IAgentInvocationRepository, AgentInvocationRepository>();
 
         // Fakes for external services
-        services.AddSingleton<ICodeHost>(CodeHost);
+        services.AddSingleton<ICodeHostFactory>(new FakeCodeHostFactory(CodeHost));
         services.AddSingleton<ILanguageModel>(LanguageModel);
         services.AddSingleton<IPromptLoader>(new FakePromptLoader());
 

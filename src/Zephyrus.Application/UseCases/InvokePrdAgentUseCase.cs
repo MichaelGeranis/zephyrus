@@ -17,7 +17,7 @@ public sealed class InvokePrdAgentUseCase
     private readonly IArtifactRepository _artifactRepository;
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly IAgent<PrdAgentInput, PrdAgentOutput> _prdAgent;
-    private readonly ICodeHost _codeHost;
+    private readonly ICodeHostFactory _codeHostFactory;
     private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokePrdAgentUseCase(
@@ -26,7 +26,7 @@ public sealed class InvokePrdAgentUseCase
         IArtifactRepository artifactRepository,
         IPipelineEventRepository pipelineEventRepository,
         IAgent<PrdAgentInput, PrdAgentOutput> prdAgent,
-        ICodeHost codeHost,
+        ICodeHostFactory codeHostFactory,
         IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
@@ -34,7 +34,7 @@ public sealed class InvokePrdAgentUseCase
         _artifactRepository = artifactRepository;
         _pipelineEventRepository = pipelineEventRepository;
         _prdAgent = prdAgent;
-        _codeHost = codeHost;
+        _codeHostFactory = codeHostFactory;
         _agentInvocationRepository = agentInvocationRepository;
     }
 
@@ -82,7 +82,8 @@ public sealed class InvokePrdAgentUseCase
         await _artifactRepository.AddAsync(artifact, ct);
 
         // Commit PRD to repository
-        await _codeHost.CommitFileAsync(
+        var codeHost = _codeHostFactory.Create(project.GitHubToken);
+        await codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
             artifact.RepositoryPath,

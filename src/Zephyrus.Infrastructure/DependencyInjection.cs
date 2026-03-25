@@ -9,6 +9,7 @@ using Zephyrus.Infrastructure.GitHub;
 using Zephyrus.Infrastructure.Persistence;
 using Zephyrus.Infrastructure.Persistence.Repositories;
 
+
 namespace Zephyrus.Infrastructure;
 
 /// <summary>
@@ -31,8 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentInvocationRepository, AgentInvocationRepository>();
 
         // GitHub
-        services.Configure<GitHubCodeHostOptions>(configuration.GetSection(GitHubCodeHostOptions.SectionName));
-        services.AddScoped<ICodeHost, GitHubCodeHost>();
+        services.AddSingleton<ICodeHostFactory, GitHubCodeHostFactory>();
 
         // Claude API
         services.Configure<ClaudeLanguageModelOptions>(configuration.GetSection(ClaudeLanguageModelOptions.SectionName));

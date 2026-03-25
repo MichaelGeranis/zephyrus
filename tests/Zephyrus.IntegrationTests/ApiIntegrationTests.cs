@@ -30,7 +30,8 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
             name = "Alpha",
             description = "First project",
             config = "project:\n  name: alpha",
-            repositorySlug = "org/alpha"
+            repositorySlug = "org/alpha",
+            gitHubToken = "fake-token"
         });
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
@@ -56,7 +57,8 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
             name = "ListTest",
             description = "For listing",
             config = "config: test",
-            repositorySlug = "org/list-test"
+            repositorySlug = "org/list-test",
+            gitHubToken = "fake-token"
         });
 
         // GET /api/projects
@@ -678,7 +680,8 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
             name,
             description = $"Project {name}",
             config = $"project:\n  name: {name.ToLower()}",
-            repositorySlug = repoSlug
+            repositorySlug = repoSlug,
+            gitHubToken = "fake-token"
         });
         response.EnsureSuccessStatusCode();
         return await Deserialize<ProjectDto>(response);

@@ -12,9 +12,9 @@ public sealed class ProjectManager
         _projectRepository = projectRepository;
     }
 
-    public async Task<Project> CreateAsync(string name, string description, string config, string repositorySlug, CancellationToken ct = default)
+    public async Task<Project> CreateAsync(string name, string description, string config, string repositorySlug, string gitHubToken, CancellationToken ct = default)
     {
-        var project = Project.Create(name, description, config, repositorySlug);
+        var project = Project.Create(name, description, config, repositorySlug, gitHubToken);
         await _projectRepository.AddAsync(project, ct);
 
         return project;

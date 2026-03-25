@@ -19,7 +19,7 @@ public sealed class InvokeQaAgentUseCase
     private readonly IArtifactRepository _artifactRepository;
     private readonly ITaskItemRepository _taskItemRepository;
     private readonly IAgent<QaAgentInput, QaAgentOutput> _qaAgent;
-    private readonly ICodeHost _codeHost;
+    private readonly ICodeHostFactory _codeHostFactory;
     private readonly IAgentInvocationRepository _agentInvocationRepository;
 
     public InvokeQaAgentUseCase(
@@ -28,7 +28,7 @@ public sealed class InvokeQaAgentUseCase
         IArtifactRepository artifactRepository,
         ITaskItemRepository taskItemRepository,
         IAgent<QaAgentInput, QaAgentOutput> qaAgent,
-        ICodeHost codeHost,
+        ICodeHostFactory codeHostFactory,
         IAgentInvocationRepository agentInvocationRepository)
     {
         _featureRepository = featureRepository;
@@ -36,7 +36,7 @@ public sealed class InvokeQaAgentUseCase
         _artifactRepository = artifactRepository;
         _taskItemRepository = taskItemRepository;
         _qaAgent = qaAgent;
-        _codeHost = codeHost;
+        _codeHostFactory = codeHostFactory;
         _agentInvocationRepository = agentInvocationRepository;
     }
 
@@ -58,7 +58,8 @@ public sealed class InvokeQaAgentUseCase
         var adrArtifact = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Adr, ct)
             ?? throw new InvalidOperationException($"No approved ADR artifact found for feature '{featureId}'.");
 
-        var adrContent = await _codeHost.GetFileContentAsync(
+        var codeHost = _codeHostFactory.Create(project.GitHubToken);
+        var adrContent = await codeHost.GetFileContentAsync(
             project.RepositorySlug, "main", adrArtifact.RepositoryPath, ct)
             ?? throw new InvalidOperationException(
                 $"ADR file not found at '{adrArtifact.RepositoryPath}' in repo '{project.RepositorySlug}'.");
@@ -99,7 +100,7 @@ public sealed class InvokeQaAgentUseCase
         var targetBranch = taskContexts.Count > 0 ? taskContexts[0].BranchName : "main";
         foreach (var testFile in agentOutput.TestFiles)
         {
-            await _codeHost.CommitFileAsync(
+            await codeHost.CommitFileAsync(
                 project.RepositorySlug,
                 targetBranch,
                 testFile.Path,
@@ -113,7 +114,7 @@ public sealed class InvokeQaAgentUseCase
         await _artifactRepository.AddAsync(artifact, ct);
 
         // Commit QA report to main
-        await _codeHost.CommitFileAsync(
+        await codeHost.CommitFileAsync(
             project.RepositorySlug,
             "main",
             artifact.RepositoryPath,
