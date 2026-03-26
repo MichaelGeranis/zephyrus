@@ -1,76 +1,83 @@
 using Microsoft.AspNetCore.Mvc;
-using Zephyrus.Application.Managers;
 using Zephyrus.Application.UseCases;
 using Zephyrus.Core.Entities;
+using Zephyrus.Infrastructure.Repositories;
 
 namespace Zephyrus.Api.Controllers;
 
 [ApiController]
-[Route("api/features/{featureId:guid}/artifacts")]
+[Route("api/[controller]")]
 public class ArtifactsController : ControllerBase
 {
-    private readonly ArtifactManager _artifactManager;
+    private readonly IArtifactRepository _artifactRepository;
+    private readonly DeleteArtifactUseCase _deleteArtifactUseCase;
 
-    public ArtifactsController(ArtifactManager artifactManager)
+    public ArtifactsController(
+        IArtifactRepository artifactRepository,
+        DeleteArtifactUseCase deleteArtifactUseCase)
     {
-        _artifactManager = artifactManager;
+        _artifactRepository = artifactRepository;
+        _deleteArtifactUseCase = deleteArtifactUseCase;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetByFeature(Guid featureId, CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<Artifact>>> GetAll()
     {
-        var artifacts = await _artifactManager.GetByFeatureIdAsync(featureId, ct);
-        if (artifacts is null)
+        var artifacts = await _artifactRepository.GetAllAsync();
+        return Ok(artifacts);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<Artifact>> GetById(int id)
+    {
+        var artifact = await _artifactRepository.GetByIdAsync(id);
+        if (artifact == null)
+        {
             return NotFound();
-
-        return Ok(artifacts.Select(a => new ArtifactResponse(a)));
+        }
+        return Ok(artifact);
     }
 
-    [HttpGet("{artifactId:guid}/content")]
-    public async Task<IActionResult> GetContent(Guid featureId, Guid artifactId, CancellationToken ct)
+    [HttpPost]
+    public async Task<ActionResult<Artifact>> Create(Artifact artifact)
     {
-        var content = await _artifactManager.GetContentAsync(featureId, artifactId, ct);
-        if (content is null)
+        var created = await _artifactRepository.CreateAsync(artifact);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ActionResult> Update(int id, Artifact artifact)
+    {
+        if (id != artifact.Id)
+        {
+            return BadRequest();
+        }
+
+        var existing = await _artifactRepository.GetByIdAsync(id);
+        if (existing == null)
+        {
             return NotFound();
+        }
 
-        return Ok(new { content });
+        await _artifactRepository.UpdateAsync(artifact);
+        return NoContent();
     }
 
-    [HttpPost("{artifactId:guid}/approve")]
-    public async Task<IActionResult> Approve(
-        Guid featureId,
-        Guid artifactId,
-        [FromBody] ApproveArtifactRequest request,
-        [FromServices] ApproveArtifactUseCase useCase,
-        CancellationToken ct)
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> Delete(int id)
     {
-        var artifact = await useCase.ExecuteAsync(featureId, artifactId, request.ApprovedBy, ct);
-
-        return Ok(new ArtifactResponse(artifact));
-    }
-
-    [HttpPut("{artifactId:guid}/content")]
-    public async Task<IActionResult> UpdateContent(
-        Guid featureId,
-        Guid artifactId,
-        [FromBody] UpdateArtifactContentRequest request,
-        [FromServices] UpdateArtifactContentUseCase useCase,
-        CancellationToken ct)
-    {
-        var artifact = await useCase.ExecuteAsync(featureId, artifactId, request.Content, ct);
-
-        return Ok(new ArtifactResponse(artifact));
-    }
-
-    [HttpPost("{artifactId:guid}/retry-commit")]
-    public async Task<IActionResult> RetryCommit(
-        Guid featureId,
-        Guid artifactId,
-        [FromServices] RetryArtifactCommitUseCase useCase,
-        CancellationToken ct)
-    {
-        var artifact = await useCase.ExecuteAsync(featureId, artifactId, ct);
-
-        return Ok(new ArtifactResponse(artifact));
+        try
+        {
+            await _deleteArtifactUseCase.ExecuteAsync(id);
+            return NoContent();
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
+        catch (Exception)
+        {
+            return Conflict();
+        }
     }
 }
