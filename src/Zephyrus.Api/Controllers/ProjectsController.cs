@@ -1,6 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
-using Zephyrus.Application.Managers;
+using Zephyrus.Application.UseCases.Projects;
+using Zephyrus.Core.Interfaces.Repositories;
 using Zephyrus.Core.Entities;
+using System;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Zephyrus.Api.Controllers;
 
@@ -8,43 +13,65 @@ namespace Zephyrus.Api.Controllers;
 [Route("api/[controller]")]
 public class ProjectsController : ControllerBase
 {
-    private readonly ProjectManager _projectManager;
+    private readonly IProjectRepository _projectRepository;
+    private readonly DeleteProjectUseCase _deleteProjectUseCase;
 
-    public ProjectsController(ProjectManager projectManager)
+    public ProjectsController(IProjectRepository projectRepository, DeleteProjectUseCase deleteProjectUseCase)
     {
-        _projectManager = projectManager;
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateProjectRequest request, CancellationToken ct)
-    {
-        var project = await _projectManager.CreateAsync(
-            request.Name, request.Description, request.Config, request.RepositorySlug, request.GitHubToken, ct);
-
-        return CreatedAtAction(nameof(GetById), new { id = project.Id }, new ProjectResponse(project));
-    }
-
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
-    {
-        var project = await _projectManager.GetByIdAsync(id, ct);
-        if (project is null)
-            return NotFound();
-
-        return Ok(new ProjectResponse(project));
+        _projectRepository = projectRepository;
+        _deleteProjectUseCase = deleteProjectUseCase;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<Project>>> GetAll()
     {
-        var projects = await _projectManager.GetAllAsync(ct);
-        return Ok(projects.Select(p => new ProjectResponse(p)));
+        var projects = await _projectRepository.GetAllAsync();
+        return Ok(projects);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<Project>> GetById(Guid id)
+    {
+        var project = await _projectRepository.GetByIdAsync(id);
+        if (project == null)
+        {
+            return NotFound();
+        }
+        return Ok(project);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<Project>> Create([FromBody] CreateProjectRequest request)
+    {
+        var project = new Project
+        {
+            Id = Guid.NewGuid(),
+            Name = request.Name,
+            Description = request.Description,
+            GitHubRepository = request.GitHubRepository,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _projectRepository.AddAsync(project);
+        return CreatedAtAction(nameof(GetById), new { id = project.Id }, project);
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> Delete(Guid id)
+    {
+        var deleted = await _deleteProjectUseCase.ExecuteAsync(id);
+        if (!deleted)
+        {
+            return NotFound();
+        }
+        return NoContent();
     }
 }
 
-public record CreateProjectRequest(string Name, string Description, string Config, string RepositorySlug, string GitHubToken);
-
-public record ProjectResponse(Guid Id, string Name, string Description, string RepositorySlug, DateTime CreatedAt)
+public class CreateProjectRequest
 {
-    public ProjectResponse(Project p) : this(p.Id, p.Name, p.Description, p.RepositorySlug, p.CreatedAt) { }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string GitHubRepository { get; set; } = string.Empty;
 }
