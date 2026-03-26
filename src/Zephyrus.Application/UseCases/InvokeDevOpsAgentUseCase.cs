@@ -76,6 +76,7 @@ public sealed class InvokeDevOpsAgentUseCase
 
         // Record Workflow artifact (generates GUID used for the file path)
         var artifact = Artifact.Create(featureId, ArtifactType.Workflow);
+        artifact.SetPendingContent(agentOutput.WorkflowYaml);
         await _artifactRepository.AddAsync(artifact, ct);
 
         // Commit workflow file to main
@@ -87,6 +88,9 @@ public sealed class InvokeDevOpsAgentUseCase
             agentOutput.WorkflowYaml,
             $"[Zephyrus] Add CI/CD workflow for {featureSlug}",
             ct);
+
+        artifact.MarkCommitSucceeded();
+        await _artifactRepository.UpdateAsync(artifact, ct);
 
         return artifact;
     }

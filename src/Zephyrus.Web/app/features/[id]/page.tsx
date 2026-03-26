@@ -54,6 +54,16 @@ export default function FeatureDetailPage() {
     }
   }
 
+  async function handleRetryCommit(artifactId: string) {
+    setError(null);
+    try {
+      await api.retryArtifactCommit(id, artifactId);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed.");
+    }
+  }
+
   if (loading) return <p className="text-gray-500">Loading...</p>;
   if (!feature) return <p className="text-red-500">Feature not found.</p>;
 
@@ -120,7 +130,11 @@ export default function FeatureDetailPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-gray-900">{artifact.type}</span>
-                  {artifact.approvedAt ? (
+                  {!artifact.commitSucceeded ? (
+                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                      Commit failed
+                    </span>
+                  ) : artifact.approvedAt ? (
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                       Approved
                     </span>
@@ -132,12 +146,22 @@ export default function FeatureDetailPage() {
                 </div>
                 <p className="text-xs text-gray-400 mt-1">{artifact.repositoryPath}</p>
               </div>
-              <Link
-                href={`/features/${id}/artifacts/${artifact.id}`}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                {artifact.approvedAt ? "View" : "Review & Approve"}
-              </Link>
+              <div className="flex items-center gap-3">
+                {!artifact.commitSucceeded && (
+                  <button
+                    onClick={() => handleRetryCommit(artifact.id)}
+                    className="text-sm text-red-600 hover:text-red-800 font-medium"
+                  >
+                    Retry Commit
+                  </button>
+                )}
+                <Link
+                  href={`/features/${id}/artifacts/${artifact.id}`}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  {artifact.approvedAt ? "View" : "Review & Approve"}
+                </Link>
+              </div>
             </div>
           ))}
         </div>

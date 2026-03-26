@@ -126,10 +126,11 @@ public record ArtifactResponse(
     string Type,
     string RepositoryPath,
     string? ApprovedBy,
-    DateTime? ApprovedAt)
+    DateTime? ApprovedAt,
+    bool CommitSucceeded)
 {
     public ArtifactResponse(Artifact a)
-        : this(a.Id, a.FeatureId, a.Type.ToString(), a.RepositoryPath, a.ApprovedBy, a.ApprovedAt) { }
+        : this(a.Id, a.FeatureId, a.Type.ToString(), a.RepositoryPath, a.ApprovedBy, a.ApprovedAt, a.CommitSucceeded) { }
 }
 
 public record PipelineEventResponse(

@@ -20,6 +20,9 @@ public class Artifact
     public string? ApprovedBy { get; private set; }
     public DateTime? ApprovedAt { get; private set; }
 
+    public bool CommitSucceeded { get; private set; }
+    public string? PendingContent { get; private set; }
+
     public Feature Feature { get; private set; } = null!;
 
     private Artifact() { }
@@ -61,5 +64,16 @@ public class Artifact
     {
         ApprovedBy = approvedBy;
         ApprovedAt = DateTime.UtcNow;
+    }
+
+    public void SetPendingContent(string content)
+    {
+        PendingContent = content;
+    }
+
+    public void MarkCommitSucceeded()
+    {
+        CommitSucceeded = true;
+        PendingContent = null;
     }
 }

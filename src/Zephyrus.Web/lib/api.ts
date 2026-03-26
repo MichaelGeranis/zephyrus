@@ -69,6 +69,13 @@ export const api = {
   getAgentInvocationDetail: (featureId: string, invocationId: string) =>
     request<AgentInvocationDetail>(`/api/features/${featureId}/agent-invocations/${invocationId}`),
 
+  // Retry
+  retryArtifactCommit: (featureId: string, artifactId: string) =>
+    request<Artifact>(
+      `/api/features/${featureId}/artifacts/${artifactId}/retry-commit`,
+      { method: "POST" }
+    ),
+
   // PRD Generation
   generatePrd: (featureId: string) =>
     request<Artifact>(`/api/features/${featureId}/generate-prd`, {

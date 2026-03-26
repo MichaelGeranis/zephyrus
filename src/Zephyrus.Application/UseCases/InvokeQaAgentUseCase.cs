@@ -111,6 +111,7 @@ public sealed class InvokeQaAgentUseCase
 
         // Record Test artifact (generates GUID used for the file path)
         var artifact = Artifact.Create(featureId, ArtifactType.Test);
+        artifact.SetPendingContent(agentOutput.ReportMarkdown);
         await _artifactRepository.AddAsync(artifact, ct);
 
         // Commit QA report to main
@@ -121,6 +122,9 @@ public sealed class InvokeQaAgentUseCase
             agentOutput.ReportMarkdown,
             $"[Zephyrus] Add QA report for {featureSlug}",
             ct);
+
+        artifact.MarkCommitSucceeded();
+        await _artifactRepository.UpdateAsync(artifact, ct);
 
         return artifact;
     }

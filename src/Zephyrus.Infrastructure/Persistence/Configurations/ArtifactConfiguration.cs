@@ -36,5 +36,13 @@ public class ArtifactConfiguration : IEntityTypeConfiguration<Artifact>
 
         builder.Property(a => a.ApprovedAt)
             .HasColumnName("approved_at");
+
+        builder.Property(a => a.CommitSucceeded)
+            .HasColumnName("commit_succeeded")
+            .HasDefaultValue(false);
+
+        builder.Property(a => a.PendingContent)
+            .HasColumnName("pending_content")
+            .HasColumnType("text");
     }
 }

@@ -21,6 +21,7 @@ export interface Artifact {
   repositoryPath: string;
   approvedBy: string | null;
   approvedAt: string | null;
+  commitSucceeded: boolean;
 }
 
 export interface TaskItem {
