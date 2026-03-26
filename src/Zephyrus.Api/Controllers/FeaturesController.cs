@@ -115,6 +115,8 @@ public record CreateFeatureRequest(Guid ProjectId, string Prompt);
 
 public record ApproveArtifactRequest(string ApprovedBy);
 
+public record UpdateArtifactContentRequest(string Content);
+
 public record FeatureResponse(Guid Id, Guid ProjectId, string Prompt, string Status, DateTime CreatedAt)
 {
     public FeatureResponse(Feature f) : this(f.Id, f.ProjectId, f.Prompt, f.Status.ToString(), f.CreatedAt) { }

@@ -17,9 +17,28 @@ export function ApprovalGate({ featureId, artifact, content, onApproved }: Appro
   const [isEditing, setIsEditing] = useState(false);
   const [approvedBy, setApprovedBy] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const isAlreadyApproved = artifact.approvedAt !== null;
+  const hasChanges = editedContent !== content;
+
+  async function handleSave() {
+    setIsSaving(true);
+    setError(null);
+    setSaveSuccess(false);
+
+    try {
+      await api.updateArtifactContent(featureId, artifact.id, editedContent);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   async function handleApprove() {
     if (!approvedBy.trim()) {
@@ -56,12 +75,26 @@ export function ApprovalGate({ featureId, artifact, content, onApproved }: Appro
             {new Date(artifact.approvedAt!).toLocaleDateString()}
           </div>
         ) : (
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="text-sm text-blue-600 hover:text-blue-800"
-          >
-            {isEditing ? "Preview" : "Edit"}
-          </button>
+          <div className="flex items-center gap-3">
+            {isEditing && hasChanges && (
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSaving ? "Saving..." : "Save"}
+              </button>
+            )}
+            {saveSuccess && (
+              <span className="text-sm text-green-600">Saved</span>
+            )}
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              {isEditing ? "Preview" : "Edit"}
+            </button>
+          </div>
         )}
       </div>
 

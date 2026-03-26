@@ -54,6 +54,14 @@ export const api = {
         body: JSON.stringify({ approvedBy }),
       }
     ),
+  updateArtifactContent: (featureId: string, artifactId: string, content: string) =>
+    request<Artifact>(
+      `/api/features/${featureId}/artifacts/${artifactId}/content`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ content }),
+      }
+    ),
 
   // Tasks
   getTasks: (featureId: string) =>

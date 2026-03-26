@@ -49,6 +49,19 @@ public class ArtifactsController : ControllerBase
         return Ok(new ArtifactResponse(artifact));
     }
 
+    [HttpPut("{artifactId:guid}/content")]
+    public async Task<IActionResult> UpdateContent(
+        Guid featureId,
+        Guid artifactId,
+        [FromBody] UpdateArtifactContentRequest request,
+        [FromServices] UpdateArtifactContentUseCase useCase,
+        CancellationToken ct)
+    {
+        var artifact = await useCase.ExecuteAsync(featureId, artifactId, request.Content, ct);
+
+        return Ok(new ArtifactResponse(artifact));
+    }
+
     [HttpPost("{artifactId:guid}/retry-commit")]
     public async Task<IActionResult> RetryCommit(
         Guid featureId,

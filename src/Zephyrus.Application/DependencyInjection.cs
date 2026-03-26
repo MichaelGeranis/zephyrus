@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<InvokeQaAgentUseCase>();
         services.AddScoped<InvokeDevOpsAgentUseCase>();
         services.AddScoped<RetryArtifactCommitUseCase>();
+        services.AddScoped<UpdateArtifactContentUseCase>();
 
         return services;
     }

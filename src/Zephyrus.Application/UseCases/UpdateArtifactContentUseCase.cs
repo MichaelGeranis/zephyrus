@@ -1,37 +1,33 @@
 using Zephyrus.Core.Entities;
-using Zephyrus.Core.Enums;
 using Zephyrus.Core.Exceptions;
 using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.Application.UseCases;
 
 /// <summary>
-/// Retries only the GitHub commit for an artifact whose agent invocation
-/// succeeded but whose commit to the code host failed.
+/// Updates an artifact's content in the code host (GitHub).
+/// Used when a reviewer edits an artifact before approving it.
 /// </summary>
-public sealed class RetryArtifactCommitUseCase
+public sealed class UpdateArtifactContentUseCase
 {
     private readonly IArtifactRepository _artifactRepository;
     private readonly IFeatureRepository _featureRepository;
     private readonly IProjectRepository _projectRepository;
     private readonly ICodeHostFactory _codeHostFactory;
-    private readonly IAgentInvocationRepository _agentInvocationRepository;
 
-    public RetryArtifactCommitUseCase(
+    public UpdateArtifactContentUseCase(
         IArtifactRepository artifactRepository,
         IFeatureRepository featureRepository,
         IProjectRepository projectRepository,
-        ICodeHostFactory codeHostFactory,
-        IAgentInvocationRepository agentInvocationRepository)
+        ICodeHostFactory codeHostFactory)
     {
         _artifactRepository = artifactRepository;
         _featureRepository = featureRepository;
         _projectRepository = projectRepository;
         _codeHostFactory = codeHostFactory;
-        _agentInvocationRepository = agentInvocationRepository;
     }
 
-    public async Task<Artifact> ExecuteAsync(Guid featureId, Guid artifactId, CancellationToken ct = default)
+    public async Task<Artifact> ExecuteAsync(Guid featureId, Guid artifactId, string content, CancellationToken ct = default)
     {
         var artifact = await _artifactRepository.GetByIdAsync(artifactId, ct)
             ?? throw new ArtifactNotFoundException(artifactId);
@@ -39,18 +35,8 @@ public sealed class RetryArtifactCommitUseCase
         if (artifact.FeatureId != featureId)
             throw new InvalidOperationException("Artifact does not belong to the specified feature.");
 
-        if (artifact.CommitSucceeded)
-            throw new InvalidOperationException("Artifact has already been committed successfully.");
-
-        // Use PendingContent if available, otherwise fall back to agent invocation response
-        var content = artifact.PendingContent;
-        if (string.IsNullOrEmpty(content))
-        {
-            content = await ResolveContentFromInvocationAsync(featureId, artifact.Type, ct);
-        }
-
-        if (string.IsNullOrEmpty(content))
-            throw new InvalidOperationException("No pending content available for retry.");
+        if (artifact.ApprovedAt is not null)
+            throw new InvalidOperationException("Cannot edit an already approved artifact.");
 
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
@@ -61,7 +47,7 @@ public sealed class RetryArtifactCommitUseCase
         var codeHost = _codeHostFactory.Create(project.GitHubToken);
 
         var featureSlug = GenerateSlug(feature.Prompt);
-        var commitMessage = $"[Zephyrus] Retry commit for {artifact.Type} - {featureSlug}";
+        var commitMessage = $"[Zephyrus] Update {artifact.Type} for {featureSlug}";
 
         await codeHost.CommitFileAsync(
             project.RepositorySlug,
@@ -71,34 +57,7 @@ public sealed class RetryArtifactCommitUseCase
             commitMessage,
             ct);
 
-        artifact.MarkCommitSucceeded();
-        await _artifactRepository.UpdateAsync(artifact, ct);
-
         return artifact;
-    }
-
-    private static readonly Dictionary<ArtifactType, string> ArtifactTypeToAgentName = new()
-    {
-        { ArtifactType.Prd, "prd" },
-        { ArtifactType.Adr, "architect" },
-        { ArtifactType.Task, "task" },
-        { ArtifactType.Test, "qa" },
-        { ArtifactType.Workflow, "devops" },
-    };
-
-    private async Task<string?> ResolveContentFromInvocationAsync(
-        Guid featureId, ArtifactType artifactType, CancellationToken ct)
-    {
-        if (!ArtifactTypeToAgentName.TryGetValue(artifactType, out var agentName))
-            return null;
-
-        var invocations = await _agentInvocationRepository.GetByFeatureIdAsync(featureId, ct);
-        var invocation = invocations
-            .Where(i => i.AgentName == agentName)
-            .OrderByDescending(i => i.InvokedAt)
-            .FirstOrDefault();
-
-        return invocation?.Response;
     }
 
     private static string GenerateSlug(string prompt)
