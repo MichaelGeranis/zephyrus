@@ -1,3 +1,4 @@
+using Zephyrus.Core.Agents;
 using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.UnitTests.Agents;
@@ -7,6 +8,7 @@ internal sealed class FakeLanguageModel : ILanguageModel
     private readonly string _response;
     public string LastSystemPrompt { get; private set; } = string.Empty;
     public string LastUserMessage { get; private set; } = string.Empty;
+    public IReadOnlyList<ConversationMessage>? LastMessages { get; private set; }
 
     public FakeLanguageModel(string response) => _response = response;
 
@@ -19,6 +21,14 @@ internal sealed class FakeLanguageModel : ILanguageModel
 
     public Task<string> GenerateAsync(string systemPrompt, string userMessage, int maxTokens, CancellationToken ct = default)
         => GenerateAsync(systemPrompt, userMessage, ct);
+
+    public Task<string> GenerateAsync(string systemPrompt, IReadOnlyList<ConversationMessage> messages, int maxTokens, CancellationToken ct = default)
+    {
+        LastSystemPrompt = systemPrompt;
+        LastMessages = messages;
+        LastUserMessage = messages[^1].Content;
+        return Task.FromResult(_response);
+    }
 }
 
 internal sealed class FakePromptLoader : IPromptLoader

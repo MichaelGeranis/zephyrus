@@ -7,6 +7,7 @@ namespace Zephyrus.Infrastructure.AI.Agents;
 /// <summary>
 /// Code Agent — implements a single task as code. Takes a task description,
 /// ADR context, and project constitution, then generates the required source files.
+/// Supports multi-pass: can request files for context before generating code.
 /// One invocation per task; parallelizable where dependencies allow.
 /// </summary>
 public sealed class CodeAgent : IAgent<CodeAgentInput, CodeAgentOutput>
@@ -24,7 +25,26 @@ public sealed class CodeAgent : IAgent<CodeAgentInput, CodeAgentOutput>
     {
         var systemPrompt = await _promptLoader.LoadAsync("code", ct);
 
-        var userMessage = $"""
+        string json;
+        string userMessage;
+
+        if (input.ConversationHistory is { Count: > 0 })
+        {
+            userMessage = input.ConversationHistory[^1].Content;
+            json = await _languageModel.GenerateAsync(systemPrompt, input.ConversationHistory, maxTokens: 16384, ct);
+        }
+        else
+        {
+            userMessage = BuildInitialUserMessage(input);
+            json = await _languageModel.GenerateAsync(systemPrompt, userMessage, maxTokens: 16384, ct);
+        }
+
+        return ParseResponse(json, systemPrompt, userMessage);
+    }
+
+    private static string BuildInitialUserMessage(CodeAgentInput input)
+    {
+        var message = $"""
             ## Task
             **Title:** {input.TaskTitle}
             **Branch:** {input.BranchName}
@@ -38,37 +58,71 @@ public sealed class CodeAgent : IAgent<CodeAgentInput, CodeAgentOutput>
             {input.ProjectConstitution}
             """;
 
-        var json = await _languageModel.GenerateAsync(systemPrompt, userMessage, maxTokens: 16384, ct);
+        if (!string.IsNullOrWhiteSpace(input.CodebaseMap))
+        {
+            message += $"""
 
-        var files = ParseFiles(json);
+
+                ## Codebase Map
+                {input.CodebaseMap}
+                """;
+        }
+
+        return message;
+    }
+
+    private static CodeAgentOutput ParseResponse(string json, string systemPrompt, string userMessage)
+    {
+        json = StripCodeFences(json);
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var action = root.TryGetProperty("action", out var actionElement)
+            ? actionElement.GetString() ?? "generate_code"
+            : "generate_code";
+
+        if (action == "request_files")
+        {
+            var files = new List<string>();
+            if (root.TryGetProperty("files", out var filesElement))
+            {
+                foreach (var file in filesElement.EnumerateArray())
+                {
+                    var path = file.GetString();
+                    if (path is not null)
+                        files.Add(path);
+                }
+            }
+
+            string? reasoning = null;
+            if (root.TryGetProperty("reasoning", out var reasoningElement))
+                reasoning = reasoningElement.GetString();
+
+            return new CodeAgentOutput
+            {
+                Action = "request_files",
+                RequestedFiles = files,
+                Reasoning = reasoning,
+                SystemPrompt = systemPrompt,
+                UserMessage = userMessage,
+                RawResponse = json
+            };
+        }
 
         return new CodeAgentOutput
         {
-            Files = files,
+            Action = "generate_code",
+            Files = ParseFiles(root),
             SystemPrompt = systemPrompt,
             UserMessage = userMessage,
             RawResponse = json
         };
     }
 
-    private static List<GeneratedFile> ParseFiles(string json)
+    private static List<GeneratedFile> ParseFiles(JsonElement root)
     {
-        // Strip markdown code fences if the LLM wraps the output
-        json = json.Trim();
-        if (json.StartsWith("```"))
-        {
-            var firstNewline = json.IndexOf('\n');
-            if (firstNewline >= 0)
-                json = json[(firstNewline + 1)..];
-            if (json.EndsWith("```"))
-                json = json[..^3];
-            json = json.Trim();
-        }
-
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
         var filesArray = root.GetProperty("files");
-
         var files = new List<GeneratedFile>();
 
         foreach (var fileElement in filesArray.EnumerateArray())
@@ -91,5 +145,20 @@ public sealed class CodeAgent : IAgent<CodeAgentInput, CodeAgentOutput>
         }
 
         return files;
+    }
+
+    private static string StripCodeFences(string json)
+    {
+        json = json.Trim();
+        if (json.StartsWith("```"))
+        {
+            var firstNewline = json.IndexOf('\n');
+            if (firstNewline >= 0)
+                json = json[(firstNewline + 1)..];
+            if (json.EndsWith("```"))
+                json = json[..^3];
+            json = json.Trim();
+        }
+        return json;
     }
 }

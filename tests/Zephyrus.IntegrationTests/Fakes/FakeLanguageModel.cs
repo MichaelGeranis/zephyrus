@@ -1,3 +1,4 @@
+using Zephyrus.Core.Agents;
 using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.IntegrationTests.Fakes;
@@ -12,6 +13,9 @@ public sealed class FakeLanguageModel : ILanguageModel
 
     public Task<string> GenerateAsync(string systemPrompt, string userMessage, int maxTokens, CancellationToken ct = default)
         => GenerateAsync(systemPrompt, userMessage, ct);
+
+    public Task<string> GenerateAsync(string systemPrompt, IReadOnlyList<ConversationMessage> messages, int maxTokens, CancellationToken ct = default)
+        => GenerateAsync(systemPrompt, messages[^1].Content, ct);
 
     public Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default)
     {

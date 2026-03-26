@@ -8,11 +8,13 @@ namespace Zephyrus.Application.UseCases;
 
 /// <summary>
 /// Orchestrates code generation for all tasks in a feature: validates state,
-/// loads ADR context, invokes the Code Agent for each task, creates feature
-/// branches and PRs, and records artifacts. Advances the feature to Coding.
+/// loads ADR context, invokes the Code Agent in a multi-pass loop for each task,
+/// creates feature branches and PRs, and records artifacts. Advances the feature to Coding.
 /// </summary>
 public sealed class InvokeCodeAgentUseCase
 {
+    private const int MaxFileRequestRounds = 3;
+
     private readonly IFeatureRepository _featureRepository;
     private readonly IProjectRepository _projectRepository;
     private readonly IArtifactRepository _artifactRepository;
@@ -68,6 +70,10 @@ public sealed class InvokeCodeAgentUseCase
             ?? throw new InvalidOperationException(
                 $"ADR file not found at '{adrArtifact.RepositoryPath}' in repo '{project.RepositorySlug}'.");
 
+        // Load codebase map (optional — null if not present)
+        var codebaseMap = await codeHost.GetFileContentAsync(
+            project.RepositorySlug, "main", "CODEBASE.md", ct);
+
         var featureSlug = GenerateSlug(feature.Prompt);
 
         if (isRerun)
@@ -101,28 +107,27 @@ public sealed class InvokeCodeAgentUseCase
             task.MarkInProgress();
             await _taskItemRepository.UpdateAsync(task, ct);
 
-            // Invoke Code Agent
-            var agentInput = new CodeAgentInput
+            // Fetch task body from GitHub (source of truth)
+            var taskBody = string.Empty;
+            if (task.ExternalIssueId.HasValue)
             {
-                TaskTitle = task.Title,
-                TaskBody = $"GitHub Issue #{task.ExternalIssueId}",
-                ApprovedAdr = adrContent,
-                ProjectConstitution = project.Config,
-                FeatureSlug = featureSlug,
-                BranchName = branchName
-            };
+                var (_, issueBody) = await codeHost.GetIssueContentAsync(
+                    project.RepositorySlug, task.ExternalIssueId.Value, ct);
+                taskBody = issueBody;
+            }
 
-            var stopwatch = Stopwatch.StartNew();
-            var agentOutput = await _codeAgent.RunAsync(agentInput, ct);
-            stopwatch.Stop();
+            // Multi-pass Code Agent loop
+            var agentOutput = await RunCodeAgentWithContextLoop(
+                task.Title, taskBody, adrContent, project.Config, featureSlug, branchName,
+                codebaseMap, project.RepositorySlug, codeHost, ct);
 
             await _agentInvocationRepository.AddAsync(
                 AgentInvocation.Create(featureId, "code",
-                    agentOutput.SystemPrompt, agentOutput.UserMessage, agentOutput.RawResponse,
-                    (int)stopwatch.ElapsedMilliseconds), ct);
+                    agentOutput.FinalOutput.SystemPrompt, agentOutput.FinalOutput.UserMessage,
+                    agentOutput.FinalOutput.RawResponse, (int)agentOutput.ElapsedMilliseconds), ct);
 
             // Commit generated files to the feature branch
-            foreach (var file in agentOutput.Files)
+            foreach (var file in agentOutput.FinalOutput.Files)
             {
                 await codeHost.CommitFileAsync(
                     project.RepositorySlug,
@@ -149,6 +154,91 @@ public sealed class InvokeCodeAgentUseCase
         var artifact = Artifact.Create(featureId, ArtifactType.Pr);
         await _artifactRepository.AddAsync(artifact, ct);
     }
+
+    private async Task<CodeAgentLoopResult> RunCodeAgentWithContextLoop(
+        string taskTitle, string taskBody, string adrContent, string constitution,
+        string featureSlug, string branchName, string? codebaseMap,
+        string repoSlug, ICodeHost codeHost, CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var conversationHistory = new List<ConversationMessage>();
+
+        // First pass — no conversation history (agent builds initial message)
+        var input = new CodeAgentInput
+        {
+            TaskTitle = taskTitle,
+            TaskBody = taskBody,
+            ApprovedAdr = adrContent,
+            ProjectConstitution = constitution,
+            FeatureSlug = featureSlug,
+            BranchName = branchName,
+            CodebaseMap = codebaseMap
+        };
+
+        var output = await _codeAgent.RunAsync(input, ct);
+
+        for (var round = 0; round < MaxFileRequestRounds && output.Action == "request_files"; round++)
+        {
+            // Build the initial user message for conversation history on first round
+            if (conversationHistory.Count == 0)
+            {
+                conversationHistory.Add(new ConversationMessage("user", output.UserMessage));
+            }
+
+            // Add the assistant's file request to history
+            conversationHistory.Add(new ConversationMessage("assistant", output.RawResponse));
+
+            // Fetch requested files from the repository
+            var fileContents = await FetchRequestedFiles(
+                repoSlug, "main", output.RequestedFiles, codeHost, ct);
+
+            // Add file contents as user message
+            conversationHistory.Add(new ConversationMessage("user", fileContents));
+
+            // Next pass with full conversation history
+            input = new CodeAgentInput
+            {
+                TaskTitle = taskTitle,
+                TaskBody = taskBody,
+                ApprovedAdr = adrContent,
+                ProjectConstitution = constitution,
+                FeatureSlug = featureSlug,
+                BranchName = branchName,
+                CodebaseMap = codebaseMap,
+                ConversationHistory = conversationHistory
+            };
+
+            output = await _codeAgent.RunAsync(input, ct);
+        }
+
+        stopwatch.Stop();
+
+        return new CodeAgentLoopResult(output, stopwatch.ElapsedMilliseconds);
+    }
+
+    private static async Task<string> FetchRequestedFiles(
+        string repoSlug, string branch, IReadOnlyList<string> filePaths,
+        ICodeHost codeHost, CancellationToken ct)
+    {
+        var sections = new List<string>();
+
+        foreach (var path in filePaths)
+        {
+            var content = await codeHost.GetFileContentAsync(repoSlug, branch, path, ct);
+            if (content is not null)
+            {
+                sections.Add($"## File: {path}\n```\n{content}\n```");
+            }
+            else
+            {
+                sections.Add($"## File: {path}\n(file not found)");
+            }
+        }
+
+        return string.Join("\n\n", sections);
+    }
+
+    private sealed record CodeAgentLoopResult(CodeAgentOutput FinalOutput, long ElapsedMilliseconds);
 
     private static string GenerateSlug(string prompt)
     {

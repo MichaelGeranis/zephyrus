@@ -11,6 +11,9 @@ public sealed class FakeCodeHost : ICodeHost
     /// <summary>Files stored as (repo, branch, path) → content.</summary>
     public Dictionary<(string Repo, string Branch, string Path), string> Files { get; } = new();
 
+    /// <summary>Issues stored as (repo, issueNumber) → (title, body).</summary>
+    public Dictionary<(string Repo, int Number), (string Title, string Body)> Issues { get; } = new();
+
     public List<string> CreatedBranches { get; } = new();
     public List<(string Repo, int Number)> CreatedPrs { get; } = new();
     public List<(string Repo, int Number)> CreatedIssues { get; } = new();
@@ -41,6 +44,7 @@ public sealed class FakeCodeHost : ICodeHost
     {
         var number = _nextIssueNumber++;
         CreatedIssues.Add((repo, number));
+        Issues[(repo, number)] = (title, body);
         return Task.FromResult(number);
     }
 
@@ -48,5 +52,13 @@ public sealed class FakeCodeHost : ICodeHost
     {
         Files.TryGetValue((repo, branch, path), out var content);
         return Task.FromResult(content);
+    }
+
+    public Task<(string Title, string Body)> GetIssueContentAsync(string repo, int issueNumber, CancellationToken ct = default)
+    {
+        if (Issues.TryGetValue((repo, issueNumber), out var issue))
+            return Task.FromResult(issue);
+
+        return Task.FromResult(($"Issue #{issueNumber}", $"Body for issue #{issueNumber}"));
     }
 }

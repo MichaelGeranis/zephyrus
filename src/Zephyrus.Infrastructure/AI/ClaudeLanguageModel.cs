@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
+using Zephyrus.Core.Agents;
 using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.Infrastructure.AI;
@@ -35,15 +36,26 @@ public sealed class ClaudeLanguageModel : ILanguageModel
 
     public async Task<string> GenerateAsync(string systemPrompt, string userMessage, int maxTokens, CancellationToken ct = default)
     {
+        var messages = new[] { new ClaudeMessage { Role = "user", Content = userMessage } };
+        return await SendRequestAsync(systemPrompt, messages, maxTokens, ct);
+    }
+
+    public async Task<string> GenerateAsync(string systemPrompt, IReadOnlyList<ConversationMessage> messages, int maxTokens, CancellationToken ct = default)
+    {
+        var claudeMessages = messages
+            .Select(m => new ClaudeMessage { Role = m.Role, Content = m.Content })
+            .ToArray();
+        return await SendRequestAsync(systemPrompt, claudeMessages, maxTokens, ct);
+    }
+
+    private async Task<string> SendRequestAsync(string systemPrompt, ClaudeMessage[] messages, int maxTokens, CancellationToken ct)
+    {
         var request = new ClaudeRequest
         {
             Model = _options.Model,
             MaxTokens = maxTokens,
             System = systemPrompt,
-            Messages = new[]
-            {
-                new ClaudeMessage { Role = "user", Content = userMessage }
-            }
+            Messages = messages
         };
 
         var response = await _httpClient.PostAsJsonAsync("/v1/messages", request, JsonOptions, ct);

@@ -114,6 +114,15 @@ public sealed class GitHubCodeHost : ICodeHost
         }
     }
 
+    /// <inheritdoc />
+    public async Task<(string Title, string Body)> GetIssueContentAsync(
+        string repo, int issueNumber, CancellationToken ct = default)
+    {
+        var (owner, repoName) = ParseRepo(repo);
+        var issue = await _client.Issue.Get(owner, repoName, issueNumber);
+        return (issue.Title, issue.Body ?? string.Empty);
+    }
+
     /// <summary>
     /// Splits an "owner/repo" string into its two components.
     /// </summary>

@@ -1,11 +1,15 @@
 namespace Zephyrus.Core.Agents;
 
 /// <summary>
-/// Output from the Code Agent: a list of files to commit to the feature branch.
+/// Output from the Code Agent. The Action field determines whether the agent
+/// is requesting more files to read or generating final code.
 /// </summary>
 public sealed class CodeAgentOutput
 {
-    public required IReadOnlyList<GeneratedFile> Files { get; init; }
+    public required string Action { get; init; }
+    public IReadOnlyList<GeneratedFile> Files { get; init; } = [];
+    public IReadOnlyList<string> RequestedFiles { get; init; } = [];
+    public string? Reasoning { get; init; }
     public required string SystemPrompt { get; init; }
     public required string UserMessage { get; init; }
     public required string RawResponse { get; init; }
