@@ -47,10 +47,12 @@ public sealed class InvokeCodeAgentUseCase
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        if (feature.Status != FeatureStatus.TasksApproved)
+        var isRerun = feature.Status == FeatureStatus.Coding;
+
+        if (feature.Status != FeatureStatus.TasksApproved && !isRerun)
         {
             throw new InvalidOperationException(
-                $"Feature must be in TasksApproved status to generate code. Current status: {feature.Status}.");
+                $"Feature must be in TasksApproved or Coding status to generate code. Current status: {feature.Status}.");
         }
 
         var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct)
@@ -68,11 +70,20 @@ public sealed class InvokeCodeAgentUseCase
 
         var featureSlug = GenerateSlug(feature.Prompt);
 
-        // Transition: TasksApproved → Coding
-        var fromStatus = feature.Advance();
-        await _featureRepository.UpdateAsync(feature, ct);
-        await _pipelineEventRepository.AddAsync(
-            PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        if (isRerun)
+        {
+            var existing = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Pr, ct);
+            if (existing is not null)
+                await _artifactRepository.DeleteAsync(existing, ct);
+        }
+        else
+        {
+            // Transition: TasksApproved → Coding
+            var fromStatus = feature.Advance();
+            await _featureRepository.UpdateAsync(feature, ct);
+            await _pipelineEventRepository.AddAsync(
+                PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        }
 
         // Get all tasks for this feature
         var tasks = await _taskItemRepository.GetByFeatureIdAsync(featureId, ct);

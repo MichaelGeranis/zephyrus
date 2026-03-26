@@ -48,6 +48,11 @@ public sealed class InvokeDevOpsAgentUseCase
                 $"Feature must be in QaApproved status to run DevOps. Current status: {feature.Status}.");
         }
 
+        // Clean up partial artifact from previous attempt (rerun)
+        var existingWorkflow = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Workflow, ct);
+        if (existingWorkflow is not null)
+            await _artifactRepository.DeleteAsync(existingWorkflow, ct);
+
         var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct)
             ?? throw new InvalidOperationException($"Project '{feature.ProjectId}' not found.");
 

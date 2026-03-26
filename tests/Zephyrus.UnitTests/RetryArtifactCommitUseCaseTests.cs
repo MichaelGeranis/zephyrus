@@ -183,6 +183,12 @@ internal sealed class InMemoryArtifactRepository : IArtifactRepository
 
     public Task UpdateAsync(Artifact artifact, CancellationToken ct = default)
         => Task.CompletedTask;
+
+    public Task DeleteAsync(Artifact artifact, CancellationToken ct = default)
+    {
+        _artifacts.RemoveAll(a => a.Id == artifact.Id);
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class InMemoryFeatureRepository : IFeatureRepository

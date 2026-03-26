@@ -46,4 +46,10 @@ public class ArtifactRepository : IArtifactRepository
         _db.Artifacts.Update(artifact);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(Artifact artifact, CancellationToken ct = default)
+    {
+        _db.Artifacts.Remove(artifact);
+        await _db.SaveChangesAsync(ct);
+    }
 }

@@ -43,10 +43,12 @@ public sealed class InvokePrdAgentUseCase
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        if (feature.Status != FeatureStatus.Ideation)
+        var isRerun = feature.Status == FeatureStatus.PrdPending;
+
+        if (feature.Status != FeatureStatus.Ideation && !isRerun)
         {
             throw new InvalidOperationException(
-                $"Feature must be in Ideation status to generate PRD. Current status: {feature.Status}.");
+                $"Feature must be in Ideation or PrdPending status to generate PRD. Current status: {feature.Status}.");
         }
 
         var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct)
@@ -54,11 +56,21 @@ public sealed class InvokePrdAgentUseCase
 
         var featureSlug = GenerateSlug(feature.Prompt);
 
-        // Transition: Ideation → PrdPending
-        var fromStatus = feature.Advance();
-        await _featureRepository.UpdateAsync(feature, ct);
-        await _pipelineEventRepository.AddAsync(
-            PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        if (isRerun)
+        {
+            // Clean up partial artifact from previous attempt
+            var existing = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Prd, ct);
+            if (existing is not null)
+                await _artifactRepository.DeleteAsync(existing, ct);
+        }
+        else
+        {
+            // Transition: Ideation → PrdPending
+            var fromStatus = feature.Advance();
+            await _featureRepository.UpdateAsync(feature, ct);
+            await _pipelineEventRepository.AddAsync(
+                PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        }
 
         // Invoke the PRD Agent
         var agentInput = new PrdAgentInput

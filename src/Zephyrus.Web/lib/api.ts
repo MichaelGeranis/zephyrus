@@ -84,6 +84,12 @@ export const api = {
       { method: "POST" }
     ),
 
+  // Rerun step
+  rerunStep: (featureId: string) =>
+    request<Feature>(`/api/features/${featureId}/rerun-step`, {
+      method: "POST",
+    }),
+
   // PRD Generation
   generatePrd: (featureId: string) =>
     request<Artifact>(`/api/features/${featureId}/generate-prd`, {

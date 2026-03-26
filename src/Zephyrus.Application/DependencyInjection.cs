@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<InvokeDevOpsAgentUseCase>();
         services.AddScoped<RetryArtifactCommitUseCase>();
         services.AddScoped<UpdateArtifactContentUseCase>();
+        services.AddScoped<RerunStepUseCase>();
 
         return services;
     }

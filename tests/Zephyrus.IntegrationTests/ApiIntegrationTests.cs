@@ -161,10 +161,16 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var project = await CreateProject("PrdWrongStatus", "org/prd-wrong-status");
         var feature = await CreateFeature(project.Id, "Some feature");
 
-        // Generate once — moves to PrdPending
-        await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
+        // Generate PRD — moves to PrdPending
+        var prdResponse = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
+        var prd = await prdResponse.Content.ReadFromJsonAsync<ArtifactDto>();
 
-        // Generate again — should fail (not in Ideation)
+        // Approve PRD — moves to PrdApproved, then orchestrator advances to ArchPending
+        await _client.PostAsJsonAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd!.Id}/approve",
+            new { approvedBy = "pm@test.com" });
+
+        // Generate PRD again — should fail (not in Ideation or PrdPending)
         var response = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

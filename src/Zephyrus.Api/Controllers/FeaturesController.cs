@@ -109,6 +109,18 @@ public class FeaturesController : ControllerBase
         return Ok(new ArtifactResponse(artifact));
     }
 
+    [HttpPost("{id:guid}/rerun-step")]
+    public async Task<IActionResult> RerunStep(
+        Guid id,
+        [FromServices] RerunStepUseCase useCase,
+        CancellationToken ct)
+    {
+        await useCase.ExecuteAsync(id, ct);
+
+        var feature = await _featureManager.GetByIdAsync(id, ct);
+        return Ok(new FeatureResponse(feature!));
+    }
+
 }
 
 public record CreateFeatureRequest(Guid ProjectId, string Prompt);

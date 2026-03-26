@@ -51,6 +51,11 @@ public sealed class InvokeQaAgentUseCase
                 $"Feature must be in QaPending status to run QA. Current status: {feature.Status}.");
         }
 
+        // Clean up partial artifact from previous attempt (rerun)
+        var existingTest = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Test, ct);
+        if (existingTest is not null)
+            await _artifactRepository.DeleteAsync(existingTest, ct);
+
         var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct)
             ?? throw new InvalidOperationException($"Project '{feature.ProjectId}' not found.");
 

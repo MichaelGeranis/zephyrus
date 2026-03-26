@@ -64,11 +64,28 @@ export default function FeatureDetailPage() {
     }
   }
 
+  async function handleRerunStep() {
+    setGenerating(true);
+    setError(null);
+    try {
+      await api.rerunStep(id);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rerun failed.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   if (loading) return <p className="text-gray-500">Loading...</p>;
   if (!feature) return <p className="text-red-500">Feature not found.</p>;
 
   const canGeneratePrd = feature.status === "Ideation";
   const awaitingApproval = feature.status in APPROVABLE_STATUSES;
+  const RERUNNABLE_STATUSES = [
+    "PrdPending", "ArchPending", "TasksPending", "Coding", "QaPending", "QaApproved",
+  ];
+  const canRerun = RERUNNABLE_STATUSES.includes(feature.status);
 
   return (
     <div>
@@ -104,6 +121,19 @@ export default function FeatureDetailPage() {
             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
           >
             {generating ? "Generating PRD..." : "Generate PRD"}
+          </button>
+          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        </div>
+      )}
+
+      {canRerun && (
+        <div className="mb-6">
+          <button
+            onClick={handleRerunStep}
+            disabled={generating}
+            className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 disabled:opacity-50"
+          >
+            {generating ? "Re-running..." : "Re-run Step"}
           </button>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </div>

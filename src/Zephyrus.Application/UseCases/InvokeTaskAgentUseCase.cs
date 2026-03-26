@@ -47,10 +47,12 @@ public sealed class InvokeTaskAgentUseCase
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        if (feature.Status != FeatureStatus.ArchApproved)
+        var isRerun = feature.Status == FeatureStatus.TasksPending;
+
+        if (feature.Status != FeatureStatus.ArchApproved && !isRerun)
         {
             throw new InvalidOperationException(
-                $"Feature must be in ArchApproved status to generate tasks. Current status: {feature.Status}.");
+                $"Feature must be in ArchApproved or TasksPending status to generate tasks. Current status: {feature.Status}.");
         }
 
         var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct)
@@ -77,11 +79,22 @@ public sealed class InvokeTaskAgentUseCase
 
         var featureSlug = GenerateSlug(feature.Prompt);
 
-        // Transition: ArchApproved → TasksPending
-        var fromStatus = feature.Advance();
-        await _featureRepository.UpdateAsync(feature, ct);
-        await _pipelineEventRepository.AddAsync(
-            PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        if (isRerun)
+        {
+            // Clean up partial state from previous attempt
+            await _taskItemRepository.DeleteByFeatureIdAsync(featureId, ct);
+            var existing = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Task, ct);
+            if (existing is not null)
+                await _artifactRepository.DeleteAsync(existing, ct);
+        }
+        else
+        {
+            // Transition: ArchApproved → TasksPending
+            var fromStatus = feature.Advance();
+            await _featureRepository.UpdateAsync(feature, ct);
+            await _pipelineEventRepository.AddAsync(
+                PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        }
 
         // Invoke the Task Agent
         var agentInput = new TaskAgentInput

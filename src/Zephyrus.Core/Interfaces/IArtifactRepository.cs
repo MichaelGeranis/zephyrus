@@ -13,4 +13,5 @@ public interface IArtifactRepository
     Task<Artifact?> GetByFeatureIdAndTypeAsync(Guid featureId, ArtifactType type, CancellationToken ct = default);
     Task AddAsync(Artifact artifact, CancellationToken ct = default);
     Task UpdateAsync(Artifact artifact, CancellationToken ct = default);
+    Task DeleteAsync(Artifact artifact, CancellationToken ct = default);
 }

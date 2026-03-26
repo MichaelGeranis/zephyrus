@@ -39,4 +39,11 @@ public class TaskItemRepository : ITaskItemRepository
         _db.TaskItems.Update(task);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteByFeatureIdAsync(Guid featureId, CancellationToken ct = default)
+    {
+        var items = await _db.TaskItems.Where(t => t.FeatureId == featureId).ToListAsync(ct);
+        _db.TaskItems.RemoveRange(items);
+        await _db.SaveChangesAsync(ct);
+    }
 }

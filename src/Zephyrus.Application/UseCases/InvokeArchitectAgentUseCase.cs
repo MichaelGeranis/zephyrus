@@ -44,10 +44,12 @@ public sealed class InvokeArchitectAgentUseCase
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        if (feature.Status != FeatureStatus.PrdApproved)
+        var isRerun = feature.Status == FeatureStatus.ArchPending;
+
+        if (feature.Status != FeatureStatus.PrdApproved && !isRerun)
         {
             throw new InvalidOperationException(
-                $"Feature must be in PrdApproved status to generate ADR. Current status: {feature.Status}.");
+                $"Feature must be in PrdApproved or ArchPending status to generate ADR. Current status: {feature.Status}.");
         }
 
         var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct)
@@ -65,11 +67,20 @@ public sealed class InvokeArchitectAgentUseCase
 
         var featureSlug = GenerateSlug(feature.Prompt);
 
-        // Transition: PrdApproved → ArchPending
-        var fromStatus = feature.Advance();
-        await _featureRepository.UpdateAsync(feature, ct);
-        await _pipelineEventRepository.AddAsync(
-            PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        if (isRerun)
+        {
+            var existing = await _artifactRepository.GetByFeatureIdAndTypeAsync(featureId, ArtifactType.Adr, ct);
+            if (existing is not null)
+                await _artifactRepository.DeleteAsync(existing, ct);
+        }
+        else
+        {
+            // Transition: PrdApproved → ArchPending
+            var fromStatus = feature.Advance();
+            await _featureRepository.UpdateAsync(feature, ct);
+            await _pipelineEventRepository.AddAsync(
+                PipelineEvent.Create(featureId, fromStatus, feature.Status, "system"), ct);
+        }
 
         // Invoke the Architect Agent
         var agentInput = new ArchitectAgentInput
