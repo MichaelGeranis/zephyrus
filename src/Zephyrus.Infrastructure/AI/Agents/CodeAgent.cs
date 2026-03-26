@@ -38,7 +38,7 @@ public sealed class CodeAgent : IAgent<CodeAgentInput, CodeAgentOutput>
             {input.ProjectConstitution}
             """;
 
-        var json = await _languageModel.GenerateAsync(systemPrompt, userMessage, ct);
+        var json = await _languageModel.GenerateAsync(systemPrompt, userMessage, maxTokens: 16384, ct);
 
         var files = ParseFiles(json);
 

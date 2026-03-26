@@ -16,6 +16,9 @@ internal sealed class FakeLanguageModel : ILanguageModel
         LastUserMessage = userMessage;
         return Task.FromResult(_response);
     }
+
+    public Task<string> GenerateAsync(string systemPrompt, string userMessage, int maxTokens, CancellationToken ct = default)
+        => GenerateAsync(systemPrompt, userMessage, ct);
 }
 
 internal sealed class FakePromptLoader : IPromptLoader

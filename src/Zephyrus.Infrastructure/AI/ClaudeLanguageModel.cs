@@ -30,12 +30,15 @@ public sealed class ClaudeLanguageModel : ILanguageModel
         _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("anthropic-version", "2023-06-01");
     }
 
-    public async Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default)
+    public Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default)
+        => GenerateAsync(systemPrompt, userMessage, _options.MaxTokens, ct);
+
+    public async Task<string> GenerateAsync(string systemPrompt, string userMessage, int maxTokens, CancellationToken ct = default)
     {
         var request = new ClaudeRequest
         {
             Model = _options.Model,
-            MaxTokens = _options.MaxTokens,
+            MaxTokens = maxTokens,
             System = systemPrompt,
             Messages = new[]
             {
@@ -48,6 +51,11 @@ public sealed class ClaudeLanguageModel : ILanguageModel
 
         var result = await response.Content.ReadFromJsonAsync<ClaudeResponse>(JsonOptions, ct)
             ?? throw new InvalidOperationException("Claude API returned null response.");
+
+        if (result.StopReason == "max_tokens")
+            throw new InvalidOperationException(
+                $"Claude API response was truncated (hit max_tokens limit of {maxTokens}). " +
+                "The output was cut off before completion. Consider increasing the token limit.");
 
         var textBlock = result.Content.FirstOrDefault(c => c.Type == "text")
             ?? throw new InvalidOperationException("Claude API response contained no text content.");
@@ -72,6 +80,7 @@ public sealed class ClaudeLanguageModel : ILanguageModel
     private sealed class ClaudeResponse
     {
         public ClaudeContentBlock[] Content { get; set; } = Array.Empty<ClaudeContentBlock>();
+        public string StopReason { get; set; } = string.Empty;
     }
 
     private sealed class ClaudeContentBlock

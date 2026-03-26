@@ -10,6 +10,9 @@ public sealed class FakeLanguageModel : ILanguageModel
 {
     public List<(string SystemPrompt, string UserMessage)> Calls { get; } = new();
 
+    public Task<string> GenerateAsync(string systemPrompt, string userMessage, int maxTokens, CancellationToken ct = default)
+        => GenerateAsync(systemPrompt, userMessage, ct);
+
     public Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default)
     {
         Calls.Add((systemPrompt, userMessage));

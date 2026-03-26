@@ -6,4 +6,5 @@ namespace Zephyrus.Core.Interfaces;
 public interface ILanguageModel
 {
     Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default);
+    Task<string> GenerateAsync(string systemPrompt, string userMessage, int maxTokens, CancellationToken ct = default);
 }
