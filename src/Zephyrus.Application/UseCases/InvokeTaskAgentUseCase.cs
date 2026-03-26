@@ -108,7 +108,7 @@ public sealed class InvokeTaskAgentUseCase
                 project.RepositorySlug,
                 taskDef.Title,
                 taskDef.Body,
-                new[] { $"agent:{taskDef.AgentType}", $"feature:{featureSlug}" },
+                new[] { $"agent:{taskDef.AgentType}", TruncateLabel($"feature:{featureSlug}") },
                 ct);
 
             var taskItem = TaskItem.Create(featureId, taskDef.Title, taskDef.AgentType);
@@ -134,6 +134,14 @@ public sealed class InvokeTaskAgentUseCase
         await _artifactRepository.UpdateAsync(artifact, ct);
 
         return artifact;
+    }
+
+    private static string TruncateLabel(string label)
+    {
+        if (label.Length <= 50)
+            return label;
+
+        return label[..50].TrimEnd('-');
     }
 
     private static string GenerateSlug(string prompt)
