@@ -116,13 +116,13 @@ public class SlugGenerationTests
     // --- Length truncation ---
 
     [Fact]
-    public void GenerateSlug_WhenLongerThan60Chars_ShouldTruncateTo60OrLess()
+    public void GenerateSlug_WhenLongerThan50Chars_ShouldTruncateTo50OrLess()
     {
         var longPrompt = "This is a very long feature prompt that exceeds the maximum allowed slug length limit";
 
         var slug = GenerateSlug(longPrompt);
 
-        Assert.True(slug.Length <= 60, $"Expected length ≤ 60 but was {slug.Length}: '{slug}'");
+        Assert.True(slug.Length <= 50, $"Expected length ≤ 50 but was {slug.Length}: '{slug}'");
     }
 
     [Fact]
@@ -136,15 +136,14 @@ public class SlugGenerationTests
     }
 
     [Fact]
-    public void GenerateSlug_WhenExactly60Chars_ShouldNotTruncate()
+    public void GenerateSlug_WhenExactly50Chars_ShouldNotTruncate()
     {
-        // 12 five-letter words separated by spaces = 12 * 5 + 11 spaces = 71 chars prompt
-        // resulting slug has hyphens, truncate at 60
+        // many five-letter words separated by spaces — resulting slug truncated at 50
         var prompt = string.Join(" ", Enumerable.Repeat("hello", 20));
 
         var slug = GenerateSlug(prompt);
 
-        Assert.True(slug.Length <= 60);
+        Assert.True(slug.Length <= 50);
     }
 
     // --- Numbers ---

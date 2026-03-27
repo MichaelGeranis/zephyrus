@@ -127,8 +127,8 @@ public sealed class InvokePrdAgentUseCase
         slug = slug.Trim('-');
 
         // Truncate to reasonable length
-        if (slug.Length > 60)
-            slug = slug[..60].TrimEnd('-');
+        if (slug.Length > 50)
+            slug = slug[..50].TrimEnd('-');
 
         return slug;
     }

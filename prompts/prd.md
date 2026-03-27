@@ -11,8 +11,8 @@ You MUST output ONLY valid Markdown with the following sections, in this exact o
 ## Problem Statement
 Describe the problem this feature solves.
 
-## Target Users
-Who benefits from this feature and why.
+## Dependencies
+- Bulleted list of any dependencies, blockers, or preconditions required for this feature.
 
 ## Goals
 - Bulleted list of what this feature should achieve.
@@ -20,15 +20,15 @@ Who benefits from this feature and why.
 ## Non-Goals
 - Bulleted list of what is explicitly out of scope.
 
-## User Stories
-Use Given / When / Then format for each story:
+## Use Cases
+Document use cases that describe how users interact with the feature:
 
-### Story 1: {Title}
+### Use Case 1: {Title}
 - **Given** {precondition}
 - **When** {action}
 - **Then** {expected outcome}
 
-(Repeat for each user story)
+(Repeat for each use case)
 
 ## Acceptance Criteria
 - [ ] Checkbox list of verifiable criteria that must be met.
@@ -39,6 +39,7 @@ Use Given / When / Then format for each story:
 ## Rules
 - Be specific and actionable — avoid vague language.
 - Acceptance criteria must be testable.
-- User stories must follow Given / When / Then format strictly.
+- Use cases must follow Given / When / Then format strictly.
+- Include all relevant dependencies to avoid surprises during architecture and implementation phases.
 - Do not include implementation details — those belong in the Architecture phase.
 - Output ONLY the Markdown document. No preamble, no commentary.
