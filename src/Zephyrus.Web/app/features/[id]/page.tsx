@@ -64,11 +64,11 @@ export default function FeatureDetailPage() {
     }
   }
 
-  async function handleRerunStep() {
+  async function handleRerunStep(step?: string) {
     setGenerating(true);
     setError(null);
     try {
-      await api.rerunStep(id);
+      await api.rerunStep(id, step);
       loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Rerun failed.");
@@ -76,6 +76,15 @@ export default function FeatureDetailPage() {
       setGenerating(false);
     }
   }
+
+  const ARTIFACT_STEP: Record<string, string> = {
+    Prd: "prd",
+    Adr: "architect",
+    Task: "tasks",
+    Pr: "code",
+    Test: "qa",
+    Workflow: "devops",
+  };
 
   if (loading) return <p className="text-gray-500">Loading...</p>;
   if (!feature) return <p className="text-red-500">Feature not found.</p>;
@@ -183,6 +192,15 @@ export default function FeatureDetailPage() {
                     className="text-sm text-red-600 hover:text-red-800 font-medium"
                   >
                     Retry Commit
+                  </button>
+                )}
+                {ARTIFACT_STEP[artifact.type] && (
+                  <button
+                    onClick={() => handleRerunStep(ARTIFACT_STEP[artifact.type])}
+                    disabled={generating}
+                    className="text-sm text-orange-600 hover:text-orange-800 font-medium disabled:opacity-50"
+                  >
+                    Re-run
                   </button>
                 )}
                 <Link

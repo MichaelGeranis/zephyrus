@@ -85,9 +85,10 @@ export const api = {
     ),
 
   // Rerun step
-  rerunStep: (featureId: string) =>
+  rerunStep: (featureId: string, step?: string) =>
     request<Feature>(`/api/features/${featureId}/rerun-step`, {
       method: "POST",
+      body: step ? JSON.stringify({ step }) : undefined,
     }),
 
   // PRD Generation
