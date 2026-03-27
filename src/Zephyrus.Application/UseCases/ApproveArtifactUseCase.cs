@@ -75,7 +75,9 @@ public sealed class ApproveArtifactUseCase
                 $"Artifact type '{artifact.Type}' does not support approval.");
         }
 
-        if (feature.Status != requiredStatus)
+        var isPastRequiredStatus = feature.Status > requiredStatus;
+
+        if (!isPastRequiredStatus && feature.Status != requiredStatus)
         {
             throw new InvalidOperationException(
                 $"Feature must be in '{requiredStatus}' status to approve a {artifact.Type} artifact. Current status: '{feature.Status}'.");
@@ -84,6 +86,11 @@ public sealed class ApproveArtifactUseCase
         // Mark artifact approved
         artifact.Approve(approvedBy);
         await _artifactRepository.UpdateAsync(artifact, ct);
+
+        // If the pipeline has already advanced past this step (force-rerun scenario),
+        // only mark the artifact — do not re-advance the pipeline or re-trigger the orchestrator.
+        if (isPastRequiredStatus)
+            return artifact;
 
         // Advance pipeline: e.g. PrdPending → PrdApproved
         var fromStatus = feature.Advance();
