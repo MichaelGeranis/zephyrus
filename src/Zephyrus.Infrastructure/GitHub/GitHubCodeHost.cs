@@ -24,11 +24,20 @@ public sealed class GitHubCodeHost : ICodeHost
     {
         var (owner, repoName) = ParseRepo(repo);
 
-        // Get the SHA of the base branch
+        // If the branch already exists (e.g. rerun), return its current SHA
+        try
+        {
+            var existing = await _client.Git.Reference.Get(owner, repoName, $"heads/{branchName}");
+            return existing.Object.Sha;
+        }
+        catch (NotFoundException)
+        {
+            // Branch does not exist yet — create it
+        }
+
         var baseBranchRef = await _client.Git.Reference.Get(owner, repoName, $"heads/{baseBranch}");
         var baseSha = baseBranchRef.Object.Sha;
 
-        // Create the new branch reference
         var newRef = await _client.Git.Reference.Create(owner, repoName,
             new NewReference($"refs/heads/{branchName}", baseSha));
 

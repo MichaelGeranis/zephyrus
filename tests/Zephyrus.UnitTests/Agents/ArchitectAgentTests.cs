@@ -59,11 +59,35 @@ public class ArchitectAgentTests
         Assert.Equal(AdrMarkdown, output.Markdown);
     }
 
-    private static ArchitectAgentInput BuildInput(string featureSlug = "test-feature") =>
+    [Fact]
+    public async Task RunAsync_WhenCodebaseMapProvided_ShouldIncludeItInUserMessage()
+    {
+        var (agent, llm, _) = CreateAgent();
+        var input = BuildInput(codebaseMap: "# Codebase\n- src/Api/Controllers/");
+
+        await agent.RunAsync(input);
+
+        Assert.Contains("## Codebase Map", llm.LastUserMessage);
+        Assert.Contains("src/Api/Controllers/", llm.LastUserMessage);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCodebaseMapIsNull_ShouldNotIncludeCodebaseSection()
+    {
+        var (agent, llm, _) = CreateAgent();
+        var input = BuildInput(codebaseMap: null);
+
+        await agent.RunAsync(input);
+
+        Assert.DoesNotContain("## Codebase Map", llm.LastUserMessage);
+    }
+
+    private static ArchitectAgentInput BuildInput(string featureSlug = "test-feature", string? codebaseMap = null) =>
         new()
         {
             ApprovedPrd = "# PRD: Test Feature",
             ProjectConstitution = "project:\n  name: test-app",
-            FeatureSlug = featureSlug
+            FeatureSlug = featureSlug,
+            CodebaseMap = codebaseMap
         };
 }

@@ -227,7 +227,7 @@ public class CodeAgentTests
     public async Task RunAsync_WhenCodebaseMapProvided_ShouldIncludeInUserMessage()
     {
         var (agent, llm, _) = CreateAgent(GenerateCodeJson());
-        var input = BuildInput() with { CodebaseMap = "# Codebase\nsrc/Core/..." };
+        var input = BuildInput(codebaseMap: "# Codebase\nsrc/Core/...");
 
         await agent.RunAsync(input);
 
@@ -246,7 +246,7 @@ public class CodeAgentTests
         Assert.DoesNotContain("Codebase Map", llm.LastUserMessage);
     }
 
-    private static CodeAgentInput BuildInput() =>
+    private static CodeAgentInput BuildInput(string? codebaseMap = null) =>
         new()
         {
             TaskTitle = "Implement UserService",
@@ -254,7 +254,8 @@ public class CodeAgentTests
             ApprovedAdr = "# ADR: Test",
             ProjectConstitution = "project:\n  name: test-app",
             FeatureSlug = "test-feature",
-            BranchName = "feature/test-feature/task-1"
+            BranchName = "feature/test-feature/task-1",
+            CodebaseMap = codebaseMap
         };
 
     private static CodeAgentInput BuildInputWithHistory() =>

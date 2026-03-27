@@ -48,6 +48,7 @@ Describe the key flow(s) as a numbered sequence of steps.
 ## Rules
 - Follow Clean Architecture: dependencies point inward.
 - Respect the project constitution conventions.
+- If a Codebase Map is provided, use it to understand the existing project structure, components, and patterns. Reference existing files, classes, and modules by name. Design new components to integrate with what already exists rather than proposing structures that conflict with the current codebase.
 - Be specific about file paths and class names.
 - Do not include implementation code — only design decisions.
 - Output ONLY the Markdown document. No preamble, no commentary.
