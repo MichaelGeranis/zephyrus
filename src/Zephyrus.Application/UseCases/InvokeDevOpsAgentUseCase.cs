@@ -37,12 +37,12 @@ public sealed class InvokeDevOpsAgentUseCase
         _agentInvocationRepository = agentInvocationRepository;
     }
 
-    public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    public async Task<Artifact> ExecuteAsync(Guid featureId, bool forceRerun = false, CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        if (feature.Status != FeatureStatus.QaApproved)
+        if (!forceRerun && feature.Status != FeatureStatus.QaApproved)
         {
             throw new InvalidOperationException(
                 $"Feature must be in QaApproved status to run DevOps. Current status: {feature.Status}.");

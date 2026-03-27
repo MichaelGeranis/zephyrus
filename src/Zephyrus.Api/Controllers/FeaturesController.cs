@@ -104,7 +104,7 @@ public class FeaturesController : ControllerBase
         [FromServices] InvokePrdAgentUseCase useCase,
         CancellationToken ct)
     {
-        var artifact = await useCase.ExecuteAsync(id, ct);
+        var artifact = await useCase.ExecuteAsync(id, ct: ct);
 
         return Ok(new ArtifactResponse(artifact));
     }
@@ -112,10 +112,11 @@ public class FeaturesController : ControllerBase
     [HttpPost("{id:guid}/rerun-step")]
     public async Task<IActionResult> RerunStep(
         Guid id,
+        [FromBody] RerunStepRequest? request,
         [FromServices] RerunStepUseCase useCase,
         CancellationToken ct)
     {
-        await useCase.ExecuteAsync(id, ct);
+        await useCase.ExecuteAsync(id, request?.Step, ct);
 
         var feature = await _featureManager.GetByIdAsync(id, ct);
         return Ok(new FeatureResponse(feature!));
@@ -124,6 +125,8 @@ public class FeaturesController : ControllerBase
 }
 
 public record CreateFeatureRequest(Guid ProjectId, string Prompt);
+
+public record RerunStepRequest(string? Step);
 
 public record ApproveArtifactRequest(string ApprovedBy);
 

@@ -40,12 +40,12 @@ public sealed class InvokeQaAgentUseCase
         _agentInvocationRepository = agentInvocationRepository;
     }
 
-    public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    public async Task<Artifact> ExecuteAsync(Guid featureId, bool forceRerun = false, CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        if (feature.Status != FeatureStatus.QaPending)
+        if (!forceRerun && feature.Status != FeatureStatus.QaPending)
         {
             throw new InvalidOperationException(
                 $"Feature must be in QaPending status to run QA. Current status: {feature.Status}.");

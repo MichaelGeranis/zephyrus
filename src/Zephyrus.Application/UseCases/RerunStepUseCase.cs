@@ -20,35 +20,64 @@ public sealed class RerunStepUseCase
         _serviceProvider = serviceProvider;
     }
 
-    public async Task ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    public async Task ExecuteAsync(Guid featureId, string? step = null, CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
+        if (step is not null)
+        {
+            switch (step.ToLowerInvariant())
+            {
+                case "prd":
+                    await GetService<InvokePrdAgentUseCase>().ExecuteAsync(featureId, forceRerun: true, ct);
+                    break;
+                case "architect":
+                    await GetService<InvokeArchitectAgentUseCase>().ExecuteAsync(featureId, forceRerun: true, ct);
+                    break;
+                case "tasks":
+                    await GetService<InvokeTaskAgentUseCase>().ExecuteAsync(featureId, forceRerun: true, ct);
+                    break;
+                case "code":
+                    await GetService<InvokeCodeAgentUseCase>().ExecuteAsync(featureId, forceRerun: true, ct);
+                    break;
+                case "qa":
+                    await GetService<InvokeQaAgentUseCase>().ExecuteAsync(featureId, forceRerun: true, ct);
+                    break;
+                case "devops":
+                    await GetService<InvokeDevOpsAgentUseCase>().ExecuteAsync(featureId, forceRerun: true, ct);
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unknown step '{step}'. Valid values: prd, architect, tasks, code, qa, devops.");
+            }
+            return;
+        }
+
         switch (feature.Status)
         {
             case FeatureStatus.PrdPending:
-                await GetService<InvokePrdAgentUseCase>().ExecuteAsync(featureId, ct);
+                await GetService<InvokePrdAgentUseCase>().ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.ArchPending:
-                await GetService<InvokeArchitectAgentUseCase>().ExecuteAsync(featureId, ct);
+                await GetService<InvokeArchitectAgentUseCase>().ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.TasksPending:
-                await GetService<InvokeTaskAgentUseCase>().ExecuteAsync(featureId, ct);
+                await GetService<InvokeTaskAgentUseCase>().ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.Coding:
-                await GetService<InvokeCodeAgentUseCase>().ExecuteAsync(featureId, ct);
+                await GetService<InvokeCodeAgentUseCase>().ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.QaPending:
-                await GetService<InvokeQaAgentUseCase>().ExecuteAsync(featureId, ct);
+                await GetService<InvokeQaAgentUseCase>().ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.QaApproved:
-                await GetService<InvokeDevOpsAgentUseCase>().ExecuteAsync(featureId, ct);
+                await GetService<InvokeDevOpsAgentUseCase>().ExecuteAsync(featureId, ct: ct);
                 break;
 
             default:

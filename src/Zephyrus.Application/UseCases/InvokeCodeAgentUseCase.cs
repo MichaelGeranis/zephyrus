@@ -44,14 +44,14 @@ public sealed class InvokeCodeAgentUseCase
         _agentInvocationRepository = agentInvocationRepository;
     }
 
-    public async Task ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    public async Task ExecuteAsync(Guid featureId, bool forceRerun = false, CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        var isRerun = feature.Status == FeatureStatus.Coding;
+        var isRerun = feature.Status == FeatureStatus.Coding || forceRerun;
 
-        if (feature.Status != FeatureStatus.TasksApproved && !isRerun)
+        if (!forceRerun && feature.Status != FeatureStatus.TasksApproved && !isRerun)
         {
             throw new InvalidOperationException(
                 $"Feature must be in TasksApproved or Coding status to generate code. Current status: {feature.Status}.");

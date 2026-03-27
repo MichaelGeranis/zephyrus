@@ -42,14 +42,14 @@ public sealed class InvokeTaskAgentUseCase
         _agentInvocationRepository = agentInvocationRepository;
     }
 
-    public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    public async Task<Artifact> ExecuteAsync(Guid featureId, bool forceRerun = false, CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        var isRerun = feature.Status == FeatureStatus.TasksPending;
+        var isRerun = feature.Status == FeatureStatus.TasksPending || forceRerun;
 
-        if (feature.Status != FeatureStatus.ArchApproved && !isRerun)
+        if (!forceRerun && feature.Status != FeatureStatus.ArchApproved && !isRerun)
         {
             throw new InvalidOperationException(
                 $"Feature must be in ArchApproved or TasksPending status to generate tasks. Current status: {feature.Status}.");

@@ -33,31 +33,31 @@ public sealed class PipelineOrchestrator
             case FeatureStatus.PrdApproved:
                 _logger.LogInformation("Feature {FeatureId}: PRD approved, triggering Architect Agent.", featureId);
                 var architectUseCase = GetRequiredService<InvokeArchitectAgentUseCase>();
-                await architectUseCase.ExecuteAsync(featureId, ct);
+                await architectUseCase.ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.ArchApproved:
                 _logger.LogInformation("Feature {FeatureId}: ADR approved, triggering Task Agent.", featureId);
                 var taskUseCase = GetRequiredService<InvokeTaskAgentUseCase>();
-                await taskUseCase.ExecuteAsync(featureId, ct);
+                await taskUseCase.ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.TasksApproved:
                 _logger.LogInformation("Feature {FeatureId}: Tasks approved, triggering Code Agents.", featureId);
                 var codeUseCase = GetRequiredService<InvokeCodeAgentUseCase>();
-                await codeUseCase.ExecuteAsync(featureId, ct);
+                await codeUseCase.ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.QaPending:
                 _logger.LogInformation("Feature {FeatureId}: PRs approved, triggering QA Agent.", featureId);
                 var qaUseCase = GetRequiredService<InvokeQaAgentUseCase>();
-                await qaUseCase.ExecuteAsync(featureId, ct);
+                await qaUseCase.ExecuteAsync(featureId, ct: ct);
                 break;
 
             case FeatureStatus.QaApproved:
                 _logger.LogInformation("Feature {FeatureId}: Tests approved, triggering DevOps Agent.", featureId);
                 var devOpsUseCase = GetRequiredService<InvokeDevOpsAgentUseCase>();
-                await devOpsUseCase.ExecuteAsync(featureId, ct);
+                await devOpsUseCase.ExecuteAsync(featureId, ct: ct);
                 break;
 
             default:

@@ -39,14 +39,14 @@ public sealed class InvokeArchitectAgentUseCase
         _agentInvocationRepository = agentInvocationRepository;
     }
 
-    public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    public async Task<Artifact> ExecuteAsync(Guid featureId, bool forceRerun = false, CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        var isRerun = feature.Status == FeatureStatus.ArchPending;
+        var isRerun = feature.Status == FeatureStatus.ArchPending || forceRerun;
 
-        if (feature.Status != FeatureStatus.PrdApproved && !isRerun)
+        if (!forceRerun && feature.Status != FeatureStatus.PrdApproved && !isRerun)
         {
             throw new InvalidOperationException(
                 $"Feature must be in PrdApproved or ArchPending status to generate ADR. Current status: {feature.Status}.");

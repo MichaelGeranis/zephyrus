@@ -38,14 +38,14 @@ public sealed class InvokePrdAgentUseCase
         _agentInvocationRepository = agentInvocationRepository;
     }
 
-    public async Task<Artifact> ExecuteAsync(Guid featureId, CancellationToken ct = default)
+    public async Task<Artifact> ExecuteAsync(Guid featureId, bool forceRerun = false, CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
             ?? throw new InvalidOperationException($"Feature '{featureId}' not found.");
 
-        var isRerun = feature.Status == FeatureStatus.PrdPending;
+        var isRerun = feature.Status == FeatureStatus.PrdPending || forceRerun;
 
-        if (feature.Status != FeatureStatus.Ideation && !isRerun)
+        if (!forceRerun && feature.Status != FeatureStatus.Ideation && !isRerun)
         {
             throw new InvalidOperationException(
                 $"Feature must be in Ideation or PrdPending status to generate PRD. Current status: {feature.Status}.");
