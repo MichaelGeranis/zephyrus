@@ -1,6 +1,8 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Interfaces;
@@ -14,6 +16,10 @@ public sealed class ClaudeLanguageModel : ILanguageModel
 {
     private readonly HttpClient _httpClient;
     private readonly ClaudeLanguageModelOptions _options;
+    private readonly ILogger<ClaudeLanguageModel> _logger;
+
+    private const int MaxRetries = 3;
+    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(10);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -21,10 +27,11 @@ public sealed class ClaudeLanguageModel : ILanguageModel
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ClaudeLanguageModel(HttpClient httpClient, IOptions<ClaudeLanguageModelOptions> options)
+    public ClaudeLanguageModel(HttpClient httpClient, IOptions<ClaudeLanguageModelOptions> options, ILogger<ClaudeLanguageModel> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _logger = logger;
 
         _httpClient.BaseAddress ??= new Uri("https://api.anthropic.com");
         _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("x-api-key", _options.ApiKey);
@@ -58,7 +65,31 @@ public sealed class ClaudeLanguageModel : ILanguageModel
             Messages = messages
         };
 
-        var response = await _httpClient.PostAsJsonAsync("/v1/messages", request, JsonOptions, ct);
+        HttpResponseMessage response = null!;
+        for (var attempt = 0; attempt <= MaxRetries; attempt++)
+        {
+            response = await _httpClient.PostAsJsonAsync("/v1/messages", request, JsonOptions, ct);
+
+            if (response.StatusCode == HttpStatusCode.TooManyRequests ||
+                response.StatusCode == HttpStatusCode.InternalServerError ||
+                response.StatusCode == HttpStatusCode.BadGateway ||
+                response.StatusCode == HttpStatusCode.ServiceUnavailable ||
+                response.StatusCode == HttpStatusCode.GatewayTimeout)
+            {
+                if (attempt == MaxRetries)
+                    break;
+
+                var delay = GetRetryDelay(response, attempt);
+                _logger.LogWarning(
+                    "Claude API returned {StatusCode}. Retrying in {Delay}s (attempt {Attempt}/{MaxRetries})",
+                    (int)response.StatusCode, delay.TotalSeconds, attempt + 1, MaxRetries);
+                await Task.Delay(delay, ct);
+                continue;
+            }
+
+            break;
+        }
+
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<ClaudeResponse>(JsonOptions, ct)
@@ -73,6 +104,17 @@ public sealed class ClaudeLanguageModel : ILanguageModel
             ?? throw new InvalidOperationException("Claude API response contained no text content.");
 
         return textBlock.Text;
+    }
+
+    private static TimeSpan GetRetryDelay(HttpResponseMessage response, int attempt)
+    {
+        if (response.Headers.TryGetValues("retry-after", out var values) &&
+            int.TryParse(values.FirstOrDefault(), out var retryAfterSeconds))
+        {
+            return TimeSpan.FromSeconds(retryAfterSeconds);
+        }
+
+        return InitialBackoff * Math.Pow(2, attempt);
     }
 
     private sealed class ClaudeRequest
