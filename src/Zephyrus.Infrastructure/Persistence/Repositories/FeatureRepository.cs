@@ -24,6 +24,13 @@ public class FeatureRepository : IFeatureRepository
             .FirstOrDefaultAsync(f => f.Id == id, ct);
     }
 
+    public async Task<Feature?> GetByIdWithArtifactsAsync(Guid id, CancellationToken ct = default)
+    {
+        return await _db.Features
+            .Include(f => f.Artifacts)
+            .FirstOrDefaultAsync(f => f.Id == id, ct);
+    }
+
     public async Task<IReadOnlyList<Feature>> GetByProjectIdAsync(Guid projectId, CancellationToken ct = default)
     {
         return await _db.Features
@@ -40,6 +47,12 @@ public class FeatureRepository : IFeatureRepository
     public async Task UpdateAsync(Feature feature, CancellationToken ct = default)
     {
         _db.Features.Update(feature);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteAsync(Feature feature, CancellationToken ct = default)
+    {
+        _db.Features.Remove(feature);
         await _db.SaveChangesAsync(ct);
     }
 }
