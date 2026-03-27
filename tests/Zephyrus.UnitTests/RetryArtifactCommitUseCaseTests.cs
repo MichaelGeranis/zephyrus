@@ -272,6 +272,9 @@ internal sealed class FakeCodeHost : ICodeHost
         Files.TryGetValue((repo, branch, path), out var content);
         return Task.FromResult(content);
     }
+
+    public Task<(string Title, string Body)> GetIssueContentAsync(string repo, int issueNumber, CancellationToken ct = default)
+        => Task.FromResult(("Fake Issue", "Fake body"));
 }
 
 internal sealed class FailingCodeHost : ICodeHost
@@ -289,6 +292,9 @@ internal sealed class FailingCodeHost : ICodeHost
         => throw new InvalidOperationException("GitHub commit failed");
 
     public Task<string?> GetFileContentAsync(string repo, string branch, string path, CancellationToken ct = default)
+        => throw new InvalidOperationException("GitHub commit failed");
+
+    public Task<(string Title, string Body)> GetIssueContentAsync(string repo, int issueNumber, CancellationToken ct = default)
         => throw new InvalidOperationException("GitHub commit failed");
 }
 

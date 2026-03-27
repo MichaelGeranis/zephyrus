@@ -22,12 +22,21 @@ public sealed class ArchitectAgent : IAgent<ArchitectAgentInput, ArchitectAgentO
     {
         var systemPrompt = await _promptLoader.LoadAsync("architect", ct);
 
+        var codebaseSection = string.IsNullOrWhiteSpace(input.CodebaseMap)
+            ? ""
+            : $"""
+
+            ## Codebase Map
+            {input.CodebaseMap}
+            """;
+
         var userMessage = $"""
             ## Approved PRD
             {input.ApprovedPrd}
 
             ## Project Constitution
             {input.ProjectConstitution}
+            {codebaseSection}
             """;
 
         var markdown = await _languageModel.GenerateAsync(systemPrompt, userMessage, ct);

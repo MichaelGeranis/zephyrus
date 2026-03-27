@@ -65,6 +65,10 @@ public sealed class InvokeArchitectAgentUseCase
             ?? throw new InvalidOperationException(
                 $"PRD file not found at '{prdArtifact.RepositoryPath}' in repo '{project.RepositorySlug}'.");
 
+        // Load codebase map (optional — null if not present)
+        var codebaseMap = await codeHost.GetFileContentAsync(
+            project.RepositorySlug, "main", "CODEBASE.md", ct);
+
         var featureSlug = GenerateSlug(feature.Prompt);
 
         if (isRerun)
@@ -87,7 +91,8 @@ public sealed class InvokeArchitectAgentUseCase
         {
             ApprovedPrd = prdContent,
             ProjectConstitution = project.Config,
-            FeatureSlug = featureSlug
+            FeatureSlug = featureSlug,
+            CodebaseMap = codebaseMap
         };
 
         var stopwatch = Stopwatch.StartNew();
