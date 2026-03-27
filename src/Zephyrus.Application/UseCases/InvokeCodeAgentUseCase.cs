@@ -97,6 +97,10 @@ public sealed class InvokeCodeAgentUseCase
         // Invoke Code Agent for each task, create branches and PRs
         foreach (var task in tasks)
         {
+            // Skip tasks that already have a PR — supports resuming after a crash
+            if (task.PrId.HasValue)
+                continue;
+
             var branchName = $"feature/{featureSlug}/{task.Id.ToString()[..8]}";
 
             // Create feature branch
