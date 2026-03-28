@@ -122,6 +122,34 @@ public class FeaturesController : ControllerBase
         return Ok(new FeatureResponse(feature!));
     }
 
+    [HttpGet("{id:guid}/deletion-preview")]
+    public async Task<IActionResult> GetDeletionPreview(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var preview = await _featureManager.GetDeletionPreviewAsync(id, ct);
+            return Ok(new DeletionPreviewResponse(preview.EntityTitle, preview.ChildrenCount, preview.Warnings));
+        }
+        catch (ArgumentException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var deletedCount = await _featureManager.DeleteAsync(id, ct);
+            return Ok(new DeletedResponse(deletedCount));
+        }
+        catch (ArgumentException)
+        {
+            return NotFound();
+        }
+    }
+
 }
 
 public record CreateFeatureRequest(Guid ProjectId, string Prompt);

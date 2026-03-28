@@ -54,4 +54,22 @@ public sealed class ArtifactManager
         return await codeHost.GetFileContentAsync(
             project.RepositorySlug, "main", artifact.RepositoryPath, ct);
     }
+
+    public async Task<DeletionPreview> GetDeletionPreviewAsync(Guid featureId, Guid artifactId, CancellationToken ct = default)
+    {
+        var artifact = await _artifactRepository.GetByIdAsync(artifactId, ct);
+        if (artifact is null || artifact.FeatureId != featureId)
+            throw new ArgumentException($"Artifact '{artifactId}' not found.");
+
+        return new DeletionPreview(artifact.Type.ToString(), 0, Array.Empty<string>());
+    }
+
+    public async Task DeleteAsync(Guid featureId, Guid artifactId, CancellationToken ct = default)
+    {
+        var artifact = await _artifactRepository.GetByIdAsync(artifactId, ct);
+        if (artifact is null || artifact.FeatureId != featureId)
+            throw new ArgumentException($"Artifact '{artifactId}' not found.");
+
+        await _artifactRepository.DeleteAsync(artifact, ct);
+    }
 }

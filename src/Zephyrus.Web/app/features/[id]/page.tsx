@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { StatusBadge, PipelineProgress } from "@/components/StatusBadge";
+import { DeleteButton } from "@/components/ui/DeleteButton";
+import { DeleteConfirmationModal } from "@/components/ui/DeleteConfirmationModal";
 import { APPROVABLE_STATUSES, STAGE_LABELS } from "@/lib/types";
 import type { Feature, Artifact, TaskItem, PipelineEvent, AgentInvocationSummary } from "@/lib/types";
 
 export default function FeatureDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [feature, setFeature] = useState<Feature | null>(null);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -18,6 +21,7 @@ export default function FeatureDetailPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   function loadData() {
     Promise.all([
@@ -98,6 +102,18 @@ export default function FeatureDetailPage() {
 
   return (
     <div>
+      {showDeleteModal && (
+        <DeleteConfirmationModal
+          entityType="Feature"
+          fetchPreview={() => api.getFeatureDeletionPreview(id)}
+          onConfirm={async () => {
+            await api.deleteFeature(id);
+            router.push(`/projects/${feature.projectId}`);
+          }}
+          onCancel={() => setShowDeleteModal(false)}
+        />
+      )}
+
       <div className="mb-6">
         <Link
           href={`/projects/${feature.projectId}`}
@@ -114,7 +130,10 @@ export default function FeatureDetailPage() {
             <h1 className="text-xl font-bold text-gray-900">{feature.prompt}</h1>
             <p className="text-xs text-gray-400 mt-1">ID: {feature.id}</p>
           </div>
-          <StatusBadge status={feature.status} />
+          <div className="flex items-center gap-3">
+            <StatusBadge status={feature.status} />
+            <DeleteButton onClick={() => setShowDeleteModal(true)} />
+          </div>
         </div>
         <div className="mt-4">
           <PipelineProgress status={feature.status} />

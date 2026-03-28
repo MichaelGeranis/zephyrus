@@ -11,4 +11,5 @@ public interface IFeatureRepository
     Task<IReadOnlyList<Feature>> GetByProjectIdAsync(Guid projectId, CancellationToken ct = default);
     Task AddAsync(Feature feature, CancellationToken ct = default);
     Task UpdateAsync(Feature feature, CancellationToken ct = default);
+    Task DeleteAsync(Feature feature, CancellationToken ct = default);
 }

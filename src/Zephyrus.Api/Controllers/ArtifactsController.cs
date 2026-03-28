@@ -73,4 +73,32 @@ public class ArtifactsController : ControllerBase
 
         return Ok(new ArtifactResponse(artifact));
     }
+
+    [HttpGet("{artifactId:guid}/deletion-preview")]
+    public async Task<IActionResult> GetDeletionPreview(Guid featureId, Guid artifactId, CancellationToken ct)
+    {
+        try
+        {
+            var preview = await _artifactManager.GetDeletionPreviewAsync(featureId, artifactId, ct);
+            return Ok(new DeletionPreviewResponse(preview.EntityTitle, preview.ChildrenCount, preview.Warnings));
+        }
+        catch (ArgumentException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpDelete("{artifactId:guid}")]
+    public async Task<IActionResult> Delete(Guid featureId, Guid artifactId, CancellationToken ct)
+    {
+        try
+        {
+            await _artifactManager.DeleteAsync(featureId, artifactId, ct);
+            return Ok(new DeletedResponse(1));
+        }
+        catch (ArgumentException)
+        {
+            return NotFound();
+        }
+    }
 }

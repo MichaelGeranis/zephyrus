@@ -40,9 +40,41 @@ public class ProjectsController : ControllerBase
         var projects = await _projectManager.GetAllAsync(ct);
         return Ok(projects.Select(p => new ProjectResponse(p)));
     }
+
+    [HttpGet("{id:guid}/deletion-preview")]
+    public async Task<IActionResult> GetDeletionPreview(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var preview = await _projectManager.GetDeletionPreviewAsync(id, ct);
+            return Ok(new DeletionPreviewResponse(preview.EntityTitle, preview.ChildrenCount, preview.Warnings));
+        }
+        catch (ArgumentException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var deletedCount = await _projectManager.DeleteAsync(id, ct);
+            return Ok(new DeletedResponse(deletedCount));
+        }
+        catch (ArgumentException)
+        {
+            return NotFound();
+        }
+    }
 }
 
 public record CreateProjectRequest(string Name, string Description, string Config, string RepositorySlug, string GitHubToken);
+
+public record DeletionPreviewResponse(string EntityTitle, int ChildrenCount, IEnumerable<string> Warnings);
+
+public record DeletedResponse(int DeletedEntitiesCount);
 
 public record ProjectResponse(Guid Id, string Name, string Description, string RepositorySlug, DateTime CreatedAt)
 {
