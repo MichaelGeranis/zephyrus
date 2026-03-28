@@ -1,7 +1,8 @@
 name: Claude Code
 permissions:
-  contents: 'read'
-  id-token: 'write'
+  contents: read
+  pages: write
+  id-token: write
 on:
   issue_comment:
     types: [created]
