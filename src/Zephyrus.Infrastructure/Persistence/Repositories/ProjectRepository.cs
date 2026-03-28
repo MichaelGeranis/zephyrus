@@ -37,4 +37,10 @@ public class ProjectRepository : IProjectRepository
         _db.Projects.Update(project);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(Project project, CancellationToken ct = default)
+    {
+        _db.Projects.Remove(project);
+        await _db.SaveChangesAsync(ct);
+    }
 }

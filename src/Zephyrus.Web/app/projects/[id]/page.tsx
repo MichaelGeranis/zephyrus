@@ -1,20 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { StatusBadge, PipelineProgress } from "@/components/StatusBadge";
+import { DeleteButton } from "@/components/ui/DeleteButton";
+import { DeleteConfirmationModal } from "@/components/ui/DeleteConfirmationModal";
 import type { Project, Feature } from "@/lib/types";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [loading, setLoading] = useState(true);
   const [prompt, setPrompt] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   function loadData() {
     Promise.all([api.getProject(id), api.getFeaturesByProject(id)])
@@ -51,12 +55,29 @@ export default function ProjectDetailPage() {
 
   return (
     <div>
+      {showDeleteModal && (
+        <DeleteConfirmationModal
+          entityType="Project"
+          fetchPreview={() => api.getProjectDeletionPreview(id)}
+          onConfirm={async () => {
+            await api.deleteProject(id);
+            router.push("/projects");
+          }}
+          onCancel={() => setShowDeleteModal(false)}
+        />
+      )}
+
       <div className="mb-8">
         <Link href="/projects" className="text-sm text-blue-600 hover:text-blue-800">
           &larr; Projects
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 mt-2">{project.name}</h1>
-        <p className="text-gray-500 mt-1">{project.description}</p>
+        <div className="flex items-start justify-between mt-2">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+            <p className="text-gray-500 mt-1">{project.description}</p>
+          </div>
+          <DeleteButton onClick={() => setShowDeleteModal(true)} />
+        </div>
       </div>
 
       {/* Create feature form */}

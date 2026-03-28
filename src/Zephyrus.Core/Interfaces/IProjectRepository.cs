@@ -11,4 +11,5 @@ public interface IProjectRepository
     Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct = default);
     Task AddAsync(Project project, CancellationToken ct = default);
     Task UpdateAsync(Project project, CancellationToken ct = default);
+    Task DeleteAsync(Project project, CancellationToken ct = default);
 }

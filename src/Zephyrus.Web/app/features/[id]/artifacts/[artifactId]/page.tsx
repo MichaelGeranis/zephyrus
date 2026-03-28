@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { ApprovalGate } from "@/components/ApprovalGate";
+import { DeleteButton } from "@/components/ui/DeleteButton";
+import { DeleteConfirmationModal } from "@/components/ui/DeleteConfirmationModal";
 import type { Artifact } from "@/lib/types";
 
 export default function ArtifactApprovalPage() {
@@ -14,6 +16,7 @@ export default function ArtifactApprovalPage() {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -41,13 +44,26 @@ export default function ArtifactApprovalPage() {
 
   return (
     <div>
-      <div className="mb-6">
+      {showDeleteModal && (
+        <DeleteConfirmationModal
+          entityType="Artifact"
+          fetchPreview={() => api.getArtifactDeletionPreview(featureId, artifactId)}
+          onConfirm={async () => {
+            await api.deleteArtifact(featureId, artifactId);
+            router.push(`/features/${featureId}`);
+          }}
+          onCancel={() => setShowDeleteModal(false)}
+        />
+      )}
+
+      <div className="mb-6 flex items-center justify-between">
         <Link
           href={`/features/${featureId}`}
           className="text-sm text-blue-600 hover:text-blue-800"
         >
           &larr; Back to feature
         </Link>
+        <DeleteButton onClick={() => setShowDeleteModal(true)} />
       </div>
 
       <ApprovalGate

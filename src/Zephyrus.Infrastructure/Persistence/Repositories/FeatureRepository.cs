@@ -42,4 +42,10 @@ public class FeatureRepository : IFeatureRepository
         _db.Features.Update(feature);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(Feature feature, CancellationToken ct = default)
+    {
+        _db.Features.Remove(feature);
+        await _db.SaveChangesAsync(ct);
+    }
 }

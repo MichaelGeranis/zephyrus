@@ -676,6 +676,170 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     }
 
     // ──────────────────────────────────────────────
+    // Delete — Projects
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Projects_DeletionPreview_ReturnsEntityInfo()
+    {
+        var project = await CreateProject("DeletePreviewProject", "org/delete-preview");
+        await CreateFeature(project.Id, "Feature to be deleted");
+
+        var response = await _client.GetAsync($"/api/projects/{project.Id}/deletion-preview");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var preview = await Deserialize<DeletionPreviewDto>(response);
+        Assert.Equal("DeletePreviewProject", preview.EntityTitle);
+        Assert.Equal(1, preview.ChildrenCount);
+        Assert.NotEmpty(preview.Warnings);
+    }
+
+    [Fact]
+    public async Task Projects_DeletionPreview_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/projects/{Guid.NewGuid()}/deletion-preview");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Projects_Delete_RemovesProjectAndFeatures()
+    {
+        var project = await CreateProject("ToDeleteProject", "org/to-delete");
+        var feature = await CreateFeature(project.Id, "Feature inside deleted project");
+
+        var deleteResponse = await _client.DeleteAsync($"/api/projects/{project.Id}");
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        var deleted = await Deserialize<DeletedDto>(deleteResponse);
+        Assert.True(deleted.DeletedEntitiesCount >= 1);
+
+        // Project should be gone
+        var getResponse = await _client.GetAsync($"/api/projects/{project.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+
+        // Feature should be gone
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, featureResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Projects_Delete_NotFound_Returns404()
+    {
+        var response = await _client.DeleteAsync($"/api/projects/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Delete — Features
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Features_DeletionPreview_ReturnsEntityInfo()
+    {
+        var project = await CreateProject("FeatureDeletePreviewProj", "org/feat-del-preview");
+        var feature = await CreateFeature(project.Id, "Feature to preview delete");
+        await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/deletion-preview");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var preview = await Deserialize<DeletionPreviewDto>(response);
+        Assert.Equal("Feature to preview delete", preview.EntityTitle);
+        Assert.Equal(1, preview.ChildrenCount);
+    }
+
+    [Fact]
+    public async Task Features_DeletionPreview_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/deletion-preview");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Features_Delete_RemovesFeatureAndArtifacts()
+    {
+        var project = await CreateProject("FeatureDeleteProj", "org/feat-delete");
+        var feature = await CreateFeature(project.Id, "Feature to be deleted");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var deleteResponse = await _client.DeleteAsync($"/api/features/{feature.Id}");
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        var deleted = await Deserialize<DeletedDto>(deleteResponse);
+        Assert.True(deleted.DeletedEntitiesCount >= 1);
+
+        // Feature should be gone
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, featureResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Features_Delete_NotFound_Returns404()
+    {
+        var response = await _client.DeleteAsync($"/api/features/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Delete — Artifacts
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Artifacts_DeletionPreview_ReturnsEntityInfo()
+    {
+        var project = await CreateProject("ArtifactDeletePreviewProj", "org/art-del-preview");
+        var feature = await CreateFeature(project.Id, "Artifact delete preview");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var response = await _client.GetAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/deletion-preview");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var preview = await Deserialize<DeletionPreviewDto>(response);
+        Assert.Equal("Prd", preview.EntityTitle);
+        Assert.Equal(0, preview.ChildrenCount);
+    }
+
+    [Fact]
+    public async Task Artifacts_DeletionPreview_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync(
+            $"/api/features/{Guid.NewGuid()}/artifacts/{Guid.NewGuid()}/deletion-preview");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Artifacts_Delete_RemovesArtifact()
+    {
+        var project = await CreateProject("ArtifactDeleteProj", "org/art-delete");
+        var feature = await CreateFeature(project.Id, "Artifact to delete");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var deleteResponse = await _client.DeleteAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}");
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        var deleted = await Deserialize<DeletedDto>(deleteResponse);
+        Assert.Equal(1, deleted.DeletedEntitiesCount);
+
+        // Artifact should be gone from the list
+        var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts");
+        var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
+        Assert.DoesNotContain(artifacts, a => a.Id == prd.Id);
+    }
+
+    [Fact]
+    public async Task Artifacts_Delete_NotFound_Returns404()
+    {
+        var project = await CreateProject("ArtifactDeleteNotFound", "org/art-del-notfound");
+        var feature = await CreateFeature(project.Id, "Artifact not found delete");
+
+        var response = await _client.DeleteAsync(
+            $"/api/features/{feature.Id}/artifacts/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────
 
@@ -744,4 +908,6 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     private record TaskItemDto(Guid Id, Guid FeatureId, string Title, string Status, string AgentType, int? ExternalIssueId, int? PrId);
     private record ContentDto(string Content);
     private record PipelineEventDto(Guid Id, Guid FeatureId, string FromStatus, string ToStatus, string TriggeredBy, DateTime Timestamp);
+    private record DeletionPreviewDto(string EntityTitle, int ChildrenCount, string[] Warnings);
+    private record DeletedDto(int DeletedEntitiesCount);
 }

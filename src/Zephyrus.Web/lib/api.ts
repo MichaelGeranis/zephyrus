@@ -19,6 +19,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 import type { Project, Feature, Artifact, TaskItem, PipelineEvent, AgentInvocationSummary, AgentInvocationDetail } from "./types";
 
+export interface DeletionPreview {
+  entityTitle: string;
+  childrenCount: number;
+  warnings: string[];
+}
+
 export const api = {
   // Projects
   getProjects: () => request<Project[]>("/api/projects"),
@@ -96,4 +102,31 @@ export const api = {
     request<Artifact>(`/api/features/${featureId}/generate-prd`, {
       method: "POST",
     }),
+
+  // Delete — Projects
+  getProjectDeletionPreview: (id: string) =>
+    request<DeletionPreview>(`/api/projects/${id}/deletion-preview`),
+  deleteProject: (id: string) =>
+    request<{ deletedEntitiesCount: number }>(`/api/projects/${id}`, {
+      method: "DELETE",
+    }),
+
+  // Delete — Features
+  getFeatureDeletionPreview: (id: string) =>
+    request<DeletionPreview>(`/api/features/${id}/deletion-preview`),
+  deleteFeature: (id: string) =>
+    request<{ deletedEntitiesCount: number }>(`/api/features/${id}`, {
+      method: "DELETE",
+    }),
+
+  // Delete — Artifacts
+  getArtifactDeletionPreview: (featureId: string, artifactId: string) =>
+    request<DeletionPreview>(
+      `/api/features/${featureId}/artifacts/${artifactId}/deletion-preview`
+    ),
+  deleteArtifact: (featureId: string, artifactId: string) =>
+    request<{ deletedEntitiesCount: number }>(
+      `/api/features/${featureId}/artifacts/${artifactId}`,
+      { method: "DELETE" }
+    ),
 };
