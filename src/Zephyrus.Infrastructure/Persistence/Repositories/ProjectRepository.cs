@@ -26,6 +26,12 @@ public class ProjectRepository : IProjectRepository
         return await _db.Projects.ToListAsync(ct);
     }
 
+    public async Task<Project?> GetByRepositorySlugAsync(string repositorySlug, CancellationToken ct = default)
+    {
+        return await _db.Projects
+            .FirstOrDefaultAsync(p => p.RepositorySlug == repositorySlug, ct);
+    }
+
     public async Task AddAsync(Project project, CancellationToken ct = default)
     {
         await _db.Projects.AddAsync(project, ct);

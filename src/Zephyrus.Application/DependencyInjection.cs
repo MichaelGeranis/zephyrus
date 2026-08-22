@@ -34,6 +34,10 @@ public static class DependencyInjection
         services.AddScoped<UpdateArtifactContentUseCase>();
         services.AddScoped<RerunStepUseCase>();
 
+        // Code-host event handlers
+        services.AddScoped<HandlePullRequestClosedUseCase>();
+        services.AddScoped<HandleDeploymentStatusUseCase>();
+
         return services;
     }
 }

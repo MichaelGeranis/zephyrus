@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Xunit;
 
@@ -565,10 +567,42 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         await ApproveArtifact(feature.Id, test.Id);
         await AssertFeatureStatus(feature.Id, "QaApproved");
 
-        // Step 7: Approve Workflow → Deployed
+        // Step 7: Approve Workflow → reviews the CI/CD config; nothing has shipped
         var workflow = await GetArtifactByType(feature.Id, "Workflow");
         await ApproveArtifact(feature.Id, workflow.Id);
+        await AssertFeatureStatus(feature.Id, "QaApproved");
+
+        // Step 8: the PR merges and the deployment reports success → Deployed
+        var mergedTasks = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks"));
+        const string mergeSha = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b";
+
+        await SendWebhook("pull_request", $$"""
+            {
+              "action": "closed",
+              "repository": { "full_name": "org/full-api-pipeline" },
+              "pull_request": {
+                "number": {{mergedTasks[0].PrId}},
+                "merged": true,
+                "merge_commit_sha": "{{mergeSha}}"
+              }
+            }
+            """);
+
+        await SendWebhook("deployment_status", $$"""
+            {
+              "repository": { "full_name": "org/full-api-pipeline" },
+              "deployment": { "sha": "{{mergeSha}}", "environment": "production" },
+              "deployment_status": { "state": "success" }
+            }
+            """);
+
         await AssertFeatureStatus(feature.Id, "Deployed");
+
+        var deployments = await Deserialize<DeploymentDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/deployments"));
+        Assert.Equal(mergeSha, Assert.Single(deployments).Sha);
+        Assert.Equal("Success", deployments[0].Status);
 
         // Verify all artifacts exist
         var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts");
@@ -927,6 +961,148 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // ──────────────────────────────────────────────
+    // Webhooks
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Webhook_WhenSignatureIsMissing_Returns401()
+    {
+        var response = await _client.PostAsync(
+            "/api/webhooks/github",
+            new StringContent("""{"repository":{"full_name":"org/x"}}""", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenSignatureIsWrong_Returns401()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/github")
+        {
+            Content = new StringContent(
+                """{"repository":{"full_name":"org/x"}}""", Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("X-GitHub-Event", "pull_request");
+        request.Headers.Add("X-Hub-Signature-256", "sha256=not-the-real-signature");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenRepositoryIsUnknown_IsAcknowledgedWithoutEffect()
+    {
+        var response = await SendWebhook("pull_request", """
+            {
+              "action": "closed",
+              "repository": { "full_name": "someone-else/not-ours" },
+              "pull_request": { "number": 1, "merged": true, "merge_commit_sha": "abc123" }
+            }
+            """);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenDeploymentFails_RecordsFailureAndDoesNotDeployTheFeature()
+    {
+        var project = await CreateProject("FailedDeploy", "org/failed-deploy");
+        var feature = await CreateFeature(project.Id, "Deployment that fails");
+        await RunPipelineToQaApproved(feature.Id);
+
+        var tasks = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks"));
+        const string sha = "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c";
+
+        await SendWebhook("pull_request", $$"""
+            {
+              "action": "closed",
+              "repository": { "full_name": "org/failed-deploy" },
+              "pull_request": {
+                "number": {{tasks[0].PrId}},
+                "merged": true,
+                "merge_commit_sha": "{{sha}}"
+              }
+            }
+            """);
+
+        await SendWebhook("deployment_status", $$"""
+            {
+              "repository": { "full_name": "org/failed-deploy" },
+              "deployment": { "sha": "{{sha}}", "environment": "production" },
+              "deployment_status": { "state": "failure" }
+            }
+            """);
+
+        await AssertFeatureStatus(feature.Id, "QaApproved");
+
+        var deployments = await Deserialize<DeploymentDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/deployments"));
+        Assert.Equal("Failed", Assert.Single(deployments).Status);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenPullRequestMerges_MarksItsTaskDone()
+    {
+        var project = await CreateProject("MergeMarksDone", "org/merge-marks-done");
+        var feature = await CreateFeature(project.Id, "Merging completes the task");
+        await RunPipelineToQaApproved(feature.Id);
+
+        var tasks = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks"));
+        var merging = tasks[0];
+
+        await SendWebhook("pull_request", $$"""
+            {
+              "action": "closed",
+              "repository": { "full_name": "org/merge-marks-done" },
+              "pull_request": {
+                "number": {{merging.PrId}},
+                "merged": true,
+                "merge_commit_sha": "5c4b3a29180f7e6d5c4b3a29180f7e6d5c4b3a29"
+              }
+            }
+            """);
+
+        var after = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks"));
+
+        Assert.Equal("Done", after.Single(t => t.Id == merging.Id).Status);
+    }
+
+    /// <summary>Drives a feature from Ideation to QaApproved through the API.</summary>
+    private async Task RunPipelineToQaApproved(Guid featureId)
+    {
+        var prd = await GeneratePrdAndGetArtifact(featureId);
+        await ApproveArtifact(featureId, prd.Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Adr")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Task")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Pr")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Test")).Id);
+    }
+
+    private async Task<HttpResponseMessage> SendWebhook(string eventName, string json)
+    {
+        var body = Encoding.UTF8.GetBytes(json);
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(ZephyrusApiFactory.WebhookSecret));
+        var signature = "sha256=" + Convert.ToHexString(hmac.ComputeHash(body)).ToLowerInvariant();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/github")
+        {
+            Content = new ByteArrayContent(body),
+        };
+        request.Content.Headers.Add("Content-Type", "application/json");
+        request.Headers.Add("X-GitHub-Event", eventName);
+        request.Headers.Add("X-Hub-Signature-256", signature);
+
+        var response = await _client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return response;
+    }
+
     private async Task<ProjectDto> CreateProject(string name, string repoSlug)
     {
         var response = await _client.PostAsJsonAsync("/api/projects", new
@@ -988,6 +1164,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     private record FeatureDto(Guid Id, Guid ProjectId, string Prompt, string Status, DateTime CreatedAt);
     private record ArtifactDto(Guid Id, Guid FeatureId, string Type, string RepositoryPath, string? ApprovedBy, DateTime? ApprovedAt);
     private record CurrentUserDto(string Email, string DisplayName, string[] Roles);
+    private record DeploymentDto(Guid Id, Guid FeatureId, string Sha, string Environment, string Status, DateTime DeployedAt);
     private record TaskItemDto(Guid Id, Guid FeatureId, string Title, string Status, string AgentType, int? ExternalIssueId, int? PrId);
     private record ContentDto(string Content);
     private record PipelineEventDto(Guid Id, Guid FeatureId, string FromStatus, string ToStatus, string TriggeredBy, DateTime Timestamp);

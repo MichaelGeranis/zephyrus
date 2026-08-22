@@ -28,6 +28,18 @@ public class TaskItemRepository : ITaskItemRepository
             .ToListAsync(ct);
     }
 
+    public async Task<TaskItem?> GetByPullRequestAsync(Guid projectId, int prId, CancellationToken ct = default)
+    {
+        return await _db.TaskItems
+            .Where(t => t.PrId == prId)
+            .Join(
+                _db.Features.Where(f => f.ProjectId == projectId),
+                task => task.FeatureId,
+                feature => feature.Id,
+                (task, _) => task)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task AddAsync(TaskItem task, CancellationToken ct = default)
     {
         await _db.TaskItems.AddAsync(task, ct);

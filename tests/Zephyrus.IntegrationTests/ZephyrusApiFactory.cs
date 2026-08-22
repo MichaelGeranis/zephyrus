@@ -27,6 +27,9 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
     /// <summary>Token for a member holding only QA.</summary>
     public const string QaOnlyToken = "test-qa";
 
+    /// <summary>Webhook secret the tests sign their deliveries with.</summary>
+    public const string WebhookSecret = "test-webhook-secret";
+
     private readonly SqliteConnection _connection;
 
     public FakeCodeHost FakeCodeHost { get; } = new();
@@ -42,11 +45,14 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Testing");
 
-        // A known team roster so the real authentication handler runs in tests.
+        // A known team roster so the real authentication handler runs in tests,
+        // plus the secret webhook deliveries are signed with.
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["GitHub:Webhook:Secret"] = WebhookSecret,
+
                 ["Team:Members:0:Email"] = "pm@test.com",
                 ["Team:Members:0:DisplayName"] = "Test Approver",
                 ["Team:Members:0:Token"] = AllRolesToken,

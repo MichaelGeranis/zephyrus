@@ -59,6 +59,7 @@ src/
 │   │   ├── IArtifactRepository.cs          — CRUD for Artifact
 │   │   ├── ICodeHost.cs                    — GitHub operations (branches, files, PRs, issues)
 │   │   ├── ICodeHostFactory.cs             — Factory for per-project ICodeHost instances
+│   │   ├── IDeploymentRepository.cs        — CRUD for Deployment
 │   │   ├── IFeatureRepository.cs           — CRUD for Feature
 │   │   ├── IJobQueue.cs                    — Queues agent work for background execution
 │   │   ├── IUserContext.cs                 — The authenticated caller and their roles
@@ -91,6 +92,8 @@ src/
 │       ├── InvokePrdAgentUseCase.cs        — Orchestrate PRD generation
 │       ├── InvokeQaAgentUseCase.cs         — Orchestrate test generation
 │       ├── InvokeTaskAgentUseCase.cs       — Orchestrate task breakdown
+│       ├── HandleDeploymentStatusUseCase.cs — Deployment result → Deployed
+│       ├── HandlePullRequestClosedUseCase.cs — Merged PR → task done + pending deployment
 │       ├── RerunStepUseCase.cs             — Re-invoke agent for a failed step
 │       ├── RetryArtifactCommitUseCase.cs   — Retry failed GitHub commits
 │       └── UpdateArtifactContentUseCase.cs — Edit artifact content before commit

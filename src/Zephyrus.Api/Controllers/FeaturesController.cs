@@ -70,6 +70,20 @@ public class FeaturesController : ControllerBase
         return Ok(events.Select(e => new PipelineEventResponse(e)));
     }
 
+    [HttpGet("{id:guid}/deployments")]
+    public async Task<IActionResult> GetDeployments(
+        Guid id,
+        [FromServices] IDeploymentRepository deploymentRepository,
+        CancellationToken ct)
+    {
+        var feature = await _featureManager.GetByIdAsync(id, ct);
+        if (feature is null)
+            return NotFound();
+
+        var deployments = await deploymentRepository.GetByFeatureIdAsync(id, ct);
+        return Ok(deployments.Select(d => new DeploymentResponse(d)));
+    }
+
     [HttpGet("{id:guid}/agent-invocations")]
     public async Task<IActionResult> GetAgentInvocations(
         Guid id,
@@ -211,6 +225,18 @@ public record AgentInvocationDetailResponse(
 {
     public AgentInvocationDetailResponse(AgentInvocation i)
         : this(i.Id, i.FeatureId, i.AgentName, i.SystemPrompt, i.UserMessage, i.Response, i.InvokedAt, i.DurationMs) { }
+}
+
+public record DeploymentResponse(
+    Guid Id,
+    Guid FeatureId,
+    string Sha,
+    string Environment,
+    string Status,
+    DateTime DeployedAt)
+{
+    public DeploymentResponse(Deployment d)
+        : this(d.Id, d.FeatureId, d.Sha, d.Environment, d.Status.ToString(), d.DeployedAt) { }
 }
 
 public record TaskItemResponse(

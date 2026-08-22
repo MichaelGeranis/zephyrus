@@ -125,6 +125,7 @@ This runs all integration tests using SQLite in-memory and fake external service
 |----------|-------------|
 | `ConnectionStrings__DefaultConnection` | PostgreSQL connection string |
 | `GitHub__Token` | GitHub personal access token |
+| `GitHub__Webhook__Secret` | Shared secret for verifying inbound GitHub webhooks |
 | `Claude__ApiKey` | Anthropic API key |
 | `Claude__Model` | Claude model ID (default: `claude-sonnet-4-20250514`) |
 | `Claude__MaxTokens` | Max output tokens (default: `4096`) |

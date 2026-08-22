@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Zephyrus.Api.Authentication;
 using Zephyrus.Api.Middleware;
+using Zephyrus.Api.Webhooks;
 using Zephyrus.Core.Interfaces;
 using Zephyrus.Application;
 using Zephyrus.Infrastructure;
@@ -22,6 +23,10 @@ builder.Services
     .AddScheme<AuthenticationSchemeOptions, TeamTokenAuthenticationHandler>(
         TeamTokenAuthenticationHandler.SchemeName, null);
 builder.Services.AddAuthorization();
+
+// Inbound webhooks authenticate by payload signature, not by the scheme above.
+builder.Services.Configure<GitHubWebhookOptions>(
+    builder.Configuration.GetSection(GitHubWebhookOptions.SectionName));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

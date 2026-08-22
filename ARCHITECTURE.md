@@ -236,6 +236,35 @@ QaApproved       → Deployed
 - Every transition is logged as a `PipelineEvent`
 - Transitions are forward-only. No rollback.
 
+### Reaching Deployed
+
+`Deployed` is the one transition no approval can trigger. Approving the
+generated workflow file reviews the CI/CD config; it does not mean anything
+shipped. The feature moves to `Deployed` only when a real deployment succeeds:
+
+```
+PR merged (webhook)      ──> TaskItem → Done
+                             Deployment(sha, environment) → Pending
+deployment_status success ──> Deployment → Success
+                             Feature: QaApproved → Deployed + PipelineEvent
+```
+
+- Deployments are matched to features by commit sha. The merge webhook is what
+  establishes that mapping, using `TaskItem.PrId` to find the feature.
+- A deployment that succeeds while the feature is not at `QaApproved` is
+  recorded but does not advance the pipeline.
+- A failed deployment marks the `Deployment` failed and leaves the feature at
+  `QaApproved`, so a later attempt can still carry it forward.
+
+### Webhook authenticity
+
+`POST /api/webhooks/github` is a public endpoint, so the payload signature is
+the only thing authenticating it. Deliveries are rejected unless
+`X-Hub-Signature-256` matches an HMAC-SHA256 of the **raw** body under
+`GitHub:Webhook:Secret`, compared with `FixedTimeEquals`. The body cannot be
+re-serialised from a parsed model — the signature covers exactly the bytes
+GitHub sent. An unset secret rejects everything.
+
 ---
 
 ## Authentication and Approval Authority
