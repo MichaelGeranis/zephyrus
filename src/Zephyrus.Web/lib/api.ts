@@ -1,10 +1,15 @@
+import { getTeamToken } from "./auth";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getTeamToken();
+
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   });
@@ -17,7 +22,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-import type { Project, Feature, Artifact, TaskItem, PipelineEvent, AgentInvocationSummary, AgentInvocationDetail } from "./types";
+import type { Project, Feature, Artifact, TaskItem, PipelineEvent, AgentInvocationSummary, AgentInvocationDetail, CurrentUser } from "./types";
 
 export interface DeletionPreview {
   entityTitle: string;
@@ -52,14 +57,15 @@ export const api = {
     request<{ content: string }>(
       `/api/features/${featureId}/artifacts/${artifactId}/content`
     ),
-  approveArtifact: (featureId: string, artifactId: string, approvedBy: string) =>
+  // The approver is the authenticated caller — the server ignores anything
+  // the client might claim, so no identity is sent.
+  approveArtifact: (featureId: string, artifactId: string) =>
     request<Artifact>(
       `/api/features/${featureId}/artifacts/${artifactId}/approve`,
-      {
-        method: "POST",
-        body: JSON.stringify({ approvedBy }),
-      }
+      { method: "POST" }
     ),
+
+  getCurrentUser: () => request<CurrentUser>("/api/me"),
   updateArtifactContent: (featureId: string, artifactId: string, content: string) =>
     request<Artifact>(
       `/api/features/${featureId}/artifacts/${artifactId}/content`,

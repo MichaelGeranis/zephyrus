@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Zephyrus.Application.Exceptions;
 using Zephyrus.Core.Exceptions;
 
 namespace Zephyrus.Api.Middleware;
@@ -35,6 +36,7 @@ public sealed class ExceptionHandlingMiddleware
     {
         var (statusCode, message) = exception switch
         {
+            UnauthorizedApprovalException ex => (HttpStatusCode.Forbidden, ex.Message),
             ArtifactNotFoundException ex => (HttpStatusCode.NotFound, ex.Message),
             InvalidTransitionException ex => (HttpStatusCode.Conflict, ex.Message),
             InvalidOperationException ex when ex.Message.Contains("not found") =>

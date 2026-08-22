@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
-import type { Artifact } from "@/lib/types";
+import type { Artifact, CurrentUser } from "@/lib/types";
+import { getTeamToken, setTeamToken, clearTeamToken } from "@/lib/auth";
 
 interface ApprovalGateProps {
   featureId: string;
@@ -15,11 +16,39 @@ interface ApprovalGateProps {
 export function ApprovalGate({ featureId, artifact, content, onApproved }: ApprovalGateProps) {
   const [editedContent, setEditedContent] = useState(content);
   const [isEditing, setIsEditing] = useState(false);
-  const [approvedBy, setApprovedBy] = useState("");
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [tokenInput, setTokenInput] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!getTeamToken()) return;
+    api.getCurrentUser().then(setCurrentUser).catch(() => clearTeamToken());
+  }, []);
+
+  async function handleSignIn() {
+    if (!tokenInput.trim()) {
+      setError("A team token is required.");
+      return;
+    }
+
+    setIsSigningIn(true);
+    setError(null);
+    setTeamToken(tokenInput.trim());
+
+    try {
+      setCurrentUser(await api.getCurrentUser());
+      setTokenInput("");
+    } catch {
+      clearTeamToken();
+      setError("That token was not recognised.");
+    } finally {
+      setIsSigningIn(false);
+    }
+  }
 
   const isAlreadyApproved = artifact.approvedAt !== null;
   const hasChanges = editedContent !== content;
@@ -41,16 +70,11 @@ export function ApprovalGate({ featureId, artifact, content, onApproved }: Appro
   }
 
   async function handleApprove() {
-    if (!approvedBy.trim()) {
-      setError("Approver name is required.");
-      return;
-    }
-
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const updated = await api.approveArtifact(featureId, artifact.id, approvedBy.trim());
+      const updated = await api.approveArtifact(featureId, artifact.id);
       onApproved(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Approval failed.");
@@ -117,28 +141,45 @@ export function ApprovalGate({ featureId, artifact, content, onApproved }: Appro
       {!isAlreadyApproved && (
         <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
           <h3 className="text-sm font-medium text-gray-700 mb-3">Approve this artifact</h3>
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <label htmlFor="approvedBy" className="block text-sm text-gray-600 mb-1">
-                Your name
-              </label>
-              <input
-                id="approvedBy"
-                type="text"
-                value={approvedBy}
-                onChange={(e) => setApprovedBy(e.target.value)}
-                placeholder="e.g. jane@company.com"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+          {currentUser ? (
+            <div className="flex items-end justify-between gap-3">
+              <div className="text-sm text-gray-600">
+                Approving as{" "}
+                <span className="font-medium text-gray-900">{currentUser.displayName}</span>{" "}
+                <span className="text-gray-500">({currentUser.roles.join(", ") || "no roles"})</span>
+              </div>
+              <button
+                onClick={handleApprove}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Approving..." : "Approve"}
+              </button>
             </div>
-            <button
-              onClick={handleApprove}
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Approving..." : "Approve"}
-            </button>
-          </div>
+          ) : (
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <label htmlFor="teamToken" className="block text-sm text-gray-600 mb-1">
+                  Team token
+                </label>
+                <input
+                  id="teamToken"
+                  type="password"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  placeholder="Sign in to approve"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={handleSignIn}
+                disabled={isSigningIn}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSigningIn ? "Signing in..." : "Sign in"}
+              </button>
+            </div>
+          )}
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </div>
       )}

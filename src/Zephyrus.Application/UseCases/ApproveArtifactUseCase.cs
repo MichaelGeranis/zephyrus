@@ -2,6 +2,8 @@ using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
 using Zephyrus.Core.Exceptions;
 using Zephyrus.Core.Interfaces;
+using Zephyrus.Core.Pipeline;
+using Zephyrus.Application.Exceptions;
 using Zephyrus.Application.Orchestration;
 
 namespace Zephyrus.Application.UseCases;
@@ -10,6 +12,7 @@ namespace Zephyrus.Application.UseCases;
 /// Approves an artifact and advances the feature through the pipeline.
 /// This is the reusable approval gate — works for PRD, ADR, Tasks, etc.
 /// After approval, delegates to the PipelineOrchestrator to trigger the next agent.
+/// The approver is taken from the authenticated caller, never from the request.
 /// </summary>
 public sealed class ApproveArtifactUseCase
 {
@@ -17,6 +20,7 @@ public sealed class ApproveArtifactUseCase
     private readonly IArtifactRepository _artifactRepository;
     private readonly IPipelineEventRepository _pipelineEventRepository;
     private readonly PipelineOrchestrator _orchestrator;
+    private readonly IUserContext _userContext;
 
     /// <summary>
     /// Maps each artifact type to the feature status that must be current
@@ -37,18 +41,19 @@ public sealed class ApproveArtifactUseCase
         IFeatureRepository featureRepository,
         IArtifactRepository artifactRepository,
         IPipelineEventRepository pipelineEventRepository,
-        PipelineOrchestrator orchestrator)
+        PipelineOrchestrator orchestrator,
+        IUserContext userContext)
     {
         _featureRepository = featureRepository;
         _artifactRepository = artifactRepository;
         _pipelineEventRepository = pipelineEventRepository;
         _orchestrator = orchestrator;
+        _userContext = userContext;
     }
 
     public async Task<Artifact> ExecuteAsync(
         Guid featureId,
         Guid artifactId,
-        string approvedBy,
         CancellationToken ct = default)
     {
         var feature = await _featureRepository.GetByIdAsync(featureId, ct)
@@ -74,6 +79,20 @@ public sealed class ApproveArtifactUseCase
             throw new InvalidOperationException(
                 $"Artifact type '{artifact.Type}' does not support approval.");
         }
+
+        // Who the caller is, and whether their roles may approve this artifact type.
+        // Identity comes from the authenticated principal so it cannot be forged,
+        // which is also what makes the PipelineEvent audit trail trustworthy.
+        if (!_userContext.IsAuthenticated || string.IsNullOrWhiteSpace(_userContext.UserId))
+            throw UnauthorizedApprovalException.NotAuthenticated(artifact.Type);
+
+        if (!ApprovalAuthority.CanApprove(artifact.Type, _userContext.Roles))
+        {
+            throw UnauthorizedApprovalException.WrongRole(
+                artifact.Type, ApprovalAuthority.RolesFor(artifact.Type), _userContext.Roles);
+        }
+
+        var approvedBy = _userContext.UserId;
 
         var isPastRequiredStatus = feature.Status > requiredStatus;
 

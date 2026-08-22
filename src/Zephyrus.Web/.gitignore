@@ -1,3 +1,6 @@
 node_modules/
 .next/
 .env.local
+
+# TypeScript incremental build info
+tsconfig.tsbuildinfo

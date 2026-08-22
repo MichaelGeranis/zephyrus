@@ -3,6 +3,7 @@ using Zephyrus.Application.Orchestration;
 using Zephyrus.Application.UseCases;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
+using Zephyrus.Application.Exceptions;
 using Zephyrus.Core.Exceptions;
 using Zephyrus.UnitTests.Jobs;
 
@@ -13,6 +14,7 @@ public class ApproveArtifactUseCaseTests
     private readonly InMemoryFeatureRepository _featureRepo = new();
     private readonly InMemoryArtifactRepository _artifactRepo = new();
     private readonly InMemoryPipelineEventRepository _eventRepo = new();
+    private readonly FakeUserContext _userContext = new();
     private readonly ApproveArtifactUseCase _sut;
 
     public ApproveArtifactUseCaseTests()
@@ -22,7 +24,7 @@ public class ApproveArtifactUseCaseTests
         var orchestrator = new PipelineOrchestrator(
             new RecordingJobQueue(), NullLogger<PipelineOrchestrator>.Instance);
 
-        _sut = new ApproveArtifactUseCase(_featureRepo, _artifactRepo, _eventRepo, orchestrator);
+        _sut = new ApproveArtifactUseCase(_featureRepo, _artifactRepo, _eventRepo, orchestrator, _userContext);
     }
 
     private static Feature CreateFeatureAt(Guid projectId, FeatureStatus targetStatus)
@@ -39,7 +41,7 @@ public class ApproveArtifactUseCaseTests
     public async Task ExecuteAsync_WhenFeatureNotFound_ThrowsInvalidOperationException()
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _sut.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), "user"));
+            _sut.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid()));
     }
 
     [Fact]
@@ -49,7 +51,7 @@ public class ApproveArtifactUseCaseTests
         await _featureRepo.AddAsync(feature);
 
         await Assert.ThrowsAsync<ArtifactNotFoundException>(() =>
-            _sut.ExecuteAsync(feature.Id, Guid.NewGuid(), "user"));
+            _sut.ExecuteAsync(feature.Id, Guid.NewGuid()));
     }
 
     [Fact]
@@ -62,7 +64,7 @@ public class ApproveArtifactUseCaseTests
         await _artifactRepo.AddAsync(artifact);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _sut.ExecuteAsync(feature.Id, artifact.Id, "user"));
+            _sut.ExecuteAsync(feature.Id, artifact.Id));
     }
 
     [Fact]
@@ -76,7 +78,7 @@ public class ApproveArtifactUseCaseTests
         await _artifactRepo.AddAsync(artifact);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _sut.ExecuteAsync(feature.Id, artifact.Id, "second-approver"));
+            _sut.ExecuteAsync(feature.Id, artifact.Id));
     }
 
     [Fact]
@@ -90,7 +92,7 @@ public class ApproveArtifactUseCaseTests
         await _artifactRepo.AddAsync(artifact);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _sut.ExecuteAsync(feature.Id, artifact.Id, "user"));
+            _sut.ExecuteAsync(feature.Id, artifact.Id));
     }
 
     // ── Happy path ────────────────────────────────────────────────────────────
@@ -106,7 +108,7 @@ public class ApproveArtifactUseCaseTests
         var artifact = Artifact.Create(feature.Id, ArtifactType.Workflow);
         await _artifactRepo.AddAsync(artifact);
 
-        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id, "tl@test.com");
+        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id);
 
         Assert.Equal("tl@test.com", result.ApprovedBy);
         Assert.NotNull(result.ApprovedAt);
@@ -122,7 +124,7 @@ public class ApproveArtifactUseCaseTests
         var artifact = Artifact.Create(feature.Id, ArtifactType.Workflow);
         await _artifactRepo.AddAsync(artifact);
 
-        await _sut.ExecuteAsync(feature.Id, artifact.Id, "tl@test.com");
+        await _sut.ExecuteAsync(feature.Id, artifact.Id);
 
         var events = _eventRepo.All;
         Assert.Single(events);
@@ -141,7 +143,7 @@ public class ApproveArtifactUseCaseTests
         var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
         await _artifactRepo.AddAsync(artifact);
 
-        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id, "user");
+        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id);
 
         // Artifact marked approved
         Assert.NotNull(result.ApprovedBy);
@@ -150,4 +152,71 @@ public class ApproveArtifactUseCaseTests
         // No pipeline event recorded
         Assert.Empty(_eventRepo.All);
     }
+    [Fact]
+    public async Task ExecuteAsync_WhenCallerIsNotAuthenticated_ThrowsUnauthorizedApprovalException()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact);
+
+        _userContext.IsAuthenticated = false;
+        _userContext.UserId = null;
+
+        await Assert.ThrowsAsync<UnauthorizedApprovalException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenCallerLacksTheRequiredRole_ThrowsUnauthorizedApprovalException()
+    {
+        // A PRD requires PM/EM; this caller only holds QA.
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact);
+
+        _userContext.Roles = new[] { TeamRole.Qa };
+
+        await Assert.ThrowsAsync<UnauthorizedApprovalException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenCallerLacksTheRequiredRole_ShouldNotApproveTheArtifact()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact);
+
+        _userContext.Roles = new[] { TeamRole.Qa };
+
+        await Assert.ThrowsAsync<UnauthorizedApprovalException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id));
+
+        Assert.Null(artifact.ApprovedBy);
+        Assert.Null(artifact.ApprovedAt);
+        Assert.Equal(FeatureStatus.PrdPending, feature.Status);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenApproved_ShouldRecordTheAuthenticatedCallerAsApprover()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact);
+
+        _userContext.UserId = "someone@zephyrus.dev";
+
+        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id);
+
+        Assert.Equal("someone@zephyrus.dev", result.ApprovedBy);
+    }
+
 }

@@ -129,6 +129,10 @@ This runs all integration tests using SQLite in-memory and fake external service
 | `Claude__Model` | Claude model ID (default: `claude-sonnet-4-20250514`) |
 | `Claude__MaxTokens` | Max output tokens (default: `4096`) |
 | `NEXT_PUBLIC_API_URL` | Backend API URL for the frontend (default: `http://localhost:5000`) |
+| `Team__Members__0__Email` | Team member identifier, recorded as the approver |
+| `Team__Members__0__DisplayName` | Team member display name |
+| `Team__Members__0__Token` | Bearer token that authenticates this member |
+| `Team__Members__0__Roles__0` | A role held by this member: `PmEm`, `TechLead`, or `Qa` |
 
 ---
 
