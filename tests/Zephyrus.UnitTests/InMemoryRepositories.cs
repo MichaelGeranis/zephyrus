@@ -69,6 +69,9 @@ internal sealed class InMemoryProjectRepository : IProjectRepository
     public Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<Project>>(_projects.ToList());
 
+    public Task<Project?> GetByRepositorySlugAsync(string repositorySlug, CancellationToken ct = default)
+        => Task.FromResult(_projects.FirstOrDefault(p => p.RepositorySlug == repositorySlug));
+
     public Task AddAsync(Project project, CancellationToken ct = default)
     {
         _projects.Add(project);

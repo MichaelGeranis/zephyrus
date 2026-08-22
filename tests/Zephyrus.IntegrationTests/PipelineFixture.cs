@@ -49,6 +49,7 @@ public sealed class PipelineFixture : IDisposable
         services.AddScoped<ITaskItemRepository, TaskItemRepository>();
         services.AddScoped<IPipelineEventRepository, PipelineEventRepository>();
         services.AddScoped<IAgentInvocationRepository, AgentInvocationRepository>();
+        services.AddScoped<IDeploymentRepository, DeploymentRepository>();
 
         // Fakes for external services
         services.AddSingleton<ICodeHostFactory>(new FakeCodeHostFactory(CodeHost));
