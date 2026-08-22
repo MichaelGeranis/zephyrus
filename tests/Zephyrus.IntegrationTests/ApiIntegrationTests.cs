@@ -1,9 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Xunit;
+using Zephyrus.Core.Interfaces;
+using Zephyrus.Infrastructure.Persistence;
 
 namespace Zephyrus.IntegrationTests;
 
@@ -1081,6 +1085,70 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Task")).Id);
         await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Pr")).Id);
         await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Test")).Id);
+    }
+
+    // ──────────────────────────────────────────────
+    // Secret protection
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task ProjectToken_IsNotStoredInPlaintext()
+    {
+        const string token = "ghp_plaintextShouldNeverReachTheDatabase";
+        var project = await CreateProjectWithToken("TokenAtRest", "org/token-at-rest", token);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ZephyrusDbContext>();
+        var stored = await db.Database
+            .SqlQueryRaw<string>("SELECT github_token AS Value FROM projects")
+            .ToListAsync();
+
+        Assert.DoesNotContain(token, stored);
+        Assert.All(stored, value => Assert.StartsWith("enc:v1:", value));
+        Assert.NotEmpty(stored);
+        Assert.NotEqual(Guid.Empty, project.Id);
+    }
+
+    [Fact]
+    public async Task ProjectToken_IsDecryptedWhenTheProjectIsLoaded()
+    {
+        const string token = "ghp_roundTripsBackOutOfTheDatabase";
+        var project = await CreateProjectWithToken("TokenRoundTrip", "org/token-round-trip", token);
+
+        using var scope = _factory.Services.CreateScope();
+        var projects = scope.ServiceProvider.GetRequiredService<IProjectRepository>();
+        var loaded = await projects.GetByIdAsync(project.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(token, loaded!.GitHubToken);
+    }
+
+    [Fact]
+    public async Task ProjectToken_ReachesTheCodeHostAsPlaintext()
+    {
+        // The encryption is invisible above the repository: agents still get a
+        // usable token.
+        const string token = "ghp_mustArriveUsableAtTheCodeHost";
+        var project = await CreateProjectWithToken("TokenToCodeHost", "org/token-to-code-host", token);
+        var feature = await CreateFeature(project.Id, "Token reaches the code host");
+
+        await GeneratePrdAndGetArtifact(feature.Id);
+
+        Assert.Equal(token, _factory.FakeCodeHostFactory.LastToken);
+    }
+
+    private async Task<ProjectDto> CreateProjectWithToken(string name, string repoSlug, string token)
+    {
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            name,
+            description = $"Project {name}",
+            config = $"project:\n  name: {name.ToLower()}",
+            repositorySlug = repoSlug,
+            gitHubToken = token
+        });
+        response.EnsureSuccessStatusCode();
+        return await Deserialize<ProjectDto>(response);
     }
 
     private async Task<HttpResponseMessage> SendWebhook(string eventName, string json)

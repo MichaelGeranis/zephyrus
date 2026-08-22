@@ -33,10 +33,12 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
     private readonly SqliteConnection _connection;
 
     public FakeCodeHost FakeCodeHost { get; } = new();
+    public FakeCodeHostFactory FakeCodeHostFactory { get; }
     public FakeLanguageModel FakeLanguageModel { get; } = new();
 
     public ZephyrusApiFactory()
     {
+        FakeCodeHostFactory = new FakeCodeHostFactory(FakeCodeHost);
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
     }
@@ -96,7 +98,7 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
                 options.UseSqlite(_connection));
 
             // Add fakes
-            services.AddSingleton<ICodeHostFactory>(new FakeCodeHostFactory(FakeCodeHost));
+            services.AddSingleton<ICodeHostFactory>(FakeCodeHostFactory);
             services.AddSingleton<ILanguageModel>(FakeLanguageModel);
             services.AddSingleton<IPromptLoader>(new FakePromptLoader());
 
