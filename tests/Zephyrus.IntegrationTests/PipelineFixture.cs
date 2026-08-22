@@ -70,6 +70,9 @@ public sealed class PipelineFixture : IDisposable
         // Run queued agent jobs inline so the cascade is deterministic in tests.
         services.AddScoped<IJobQueue, InlineJobQueue>();
 
+        // Approvals need an authenticated caller; default holds every role.
+        services.AddSingleton<IUserContext>(new FakeUserContext());
+
         ServiceProvider = services.BuildServiceProvider();
 
         // Create the schema

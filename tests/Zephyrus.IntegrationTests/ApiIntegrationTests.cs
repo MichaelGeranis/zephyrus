@@ -168,9 +168,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var prd = await prdResponse.Content.ReadFromJsonAsync<ArtifactDto>();
 
         // Approve PRD — moves to PrdApproved, then orchestrator advances to ArchPending
-        await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd!.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd!.Id}/approve", null);
 
         // Generate PRD again — should fail (not in Ideation or PrdPending)
         var response = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
@@ -276,9 +274,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var prd = await Deserialize<ArtifactDto>(prdResponse);
 
         // POST /api/features/{id}/artifacts/{artifactId}/approve
-        var approveResponse = await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        var approveResponse = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
         Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
 
         var approved = await Deserialize<ArtifactDto>(approveResponse);
@@ -297,9 +293,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var prd = await Deserialize<ArtifactDto>(prdResponse);
 
         // Approve PRD — triggers orchestrator → Architect Agent
-        await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
 
         // Feature should be at ArchPending (orchestrator advanced it)
         var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}");
@@ -324,9 +318,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var prdResponse = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
         var prd = await Deserialize<ArtifactDto>(prdResponse);
 
-        await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
 
         // Find the ADR artifact
         var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts");
@@ -334,9 +326,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var adr = artifacts.Single(a => a.Type == "Adr");
 
         // Approve ADR
-        var approveResponse = await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{adr.Id}/approve",
-            new { approvedBy = "techlead@test.com" });
+        var approveResponse = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{adr.Id}/approve", null);
         Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
 
         // Feature should be at TasksPending (orchestrator triggers Task Agent after ADR approval)
@@ -355,14 +345,10 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var prd = await Deserialize<ArtifactDto>(prdResponse);
 
         // First approve — OK
-        await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
 
         // Second approve — should fail
-        var secondApprove = await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "other@test.com" });
+        var secondApprove = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
         Assert.Equal(HttpStatusCode.BadRequest, secondApprove.StatusCode);
     }
 
@@ -376,14 +362,10 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var prdResponse = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
         var prd = await Deserialize<ArtifactDto>(prdResponse);
 
-        await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
 
         // Try to approve the PRD again — feature is no longer in PrdPending
-        var wrongStatusApprove = await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        var wrongStatusApprove = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
         Assert.Equal(HttpStatusCode.BadRequest, wrongStatusApprove.StatusCode);
     }
 
@@ -449,10 +431,10 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
 
         // PRD → Approve → Architect → Approve ADR → Task Agent runs
         var prd = await GeneratePrdAndGetArtifact(feature.Id);
-        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        await ApproveArtifact(feature.Id, prd.Id);
 
         var adr = await GetArtifactByType(feature.Id, "Adr");
-        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, adr.Id);
 
         // Feature should now be at TasksPending with tasks created
         var response = await _client.GetAsync($"/api/features/{feature.Id}/tasks");
@@ -479,11 +461,11 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
 
         // Run through to Coding (Task Agent → approve → Code Agent)
         var prd = await GeneratePrdAndGetArtifact(feature.Id);
-        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        await ApproveArtifact(feature.Id, prd.Id);
         var adr = await GetArtifactByType(feature.Id, "Adr");
-        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, adr.Id);
         var task = await GetArtifactByType(feature.Id, "Task");
-        await ApproveArtifact(feature.Id, task.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, task.Id);
 
         // Feature is now in Coding — tasks should have PrIds
         var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}");
@@ -512,7 +494,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
 
         // PRD → Approve → Architect runs (3 transitions: Ideation→PrdPending, PrdPending→PrdApproved, PrdApproved→ArchPending)
         var prd = await GeneratePrdAndGetArtifact(feature.Id);
-        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        await ApproveArtifact(feature.Id, prd.Id);
 
         var response = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -562,32 +544,32 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         await AssertFeatureStatus(feature.Id, "PrdPending");
 
         // Step 2: Approve PRD → PrdApproved → Architect runs → ArchPending
-        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        await ApproveArtifact(feature.Id, prd.Id);
         await AssertFeatureStatus(feature.Id, "ArchPending");
 
         // Step 3: Approve ADR → ArchApproved → Task Agent runs → TasksPending
         var adr = await GetArtifactByType(feature.Id, "Adr");
-        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, adr.Id);
         await AssertFeatureStatus(feature.Id, "TasksPending");
 
         // Step 4: Approve Tasks → TasksApproved → Code Agents run → Coding
         var task = await GetArtifactByType(feature.Id, "Task");
-        await ApproveArtifact(feature.Id, task.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, task.Id);
         await AssertFeatureStatus(feature.Id, "Coding");
 
         // Step 5: Approve PR → Coding → QaPending, QA Agent runs
         var pr = await GetArtifactByType(feature.Id, "Pr");
-        await ApproveArtifact(feature.Id, pr.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, pr.Id);
         await AssertFeatureStatus(feature.Id, "QaPending");
 
         // Step 6: Approve Test → QaApproved, DevOps Agent runs
         var test = await GetArtifactByType(feature.Id, "Test");
-        await ApproveArtifact(feature.Id, test.Id, "qa@test.com");
+        await ApproveArtifact(feature.Id, test.Id);
         await AssertFeatureStatus(feature.Id, "QaApproved");
 
         // Step 7: Approve Workflow → reviews the CI/CD config; nothing has shipped
         var workflow = await GetArtifactByType(feature.Id, "Workflow");
-        await ApproveArtifact(feature.Id, workflow.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, workflow.Id);
         await AssertFeatureStatus(feature.Id, "QaApproved");
 
         // Step 8: the PR merges and the deployment reports success → Deployed
@@ -658,15 +640,15 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
 
         // Run through full pipeline to QaApproved (DevOps Agent creates workflow)
         var prd = await GeneratePrdAndGetArtifact(feature.Id);
-        await ApproveArtifact(feature.Id, prd.Id, "pm@test.com");
+        await ApproveArtifact(feature.Id, prd.Id);
         var adr = await GetArtifactByType(feature.Id, "Adr");
-        await ApproveArtifact(feature.Id, adr.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, adr.Id);
         var task = await GetArtifactByType(feature.Id, "Task");
-        await ApproveArtifact(feature.Id, task.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, task.Id);
         var pr = await GetArtifactByType(feature.Id, "Pr");
-        await ApproveArtifact(feature.Id, pr.Id, "tl@test.com");
+        await ApproveArtifact(feature.Id, pr.Id);
         var test = await GetArtifactByType(feature.Id, "Test");
-        await ApproveArtifact(feature.Id, test.Id, "qa@test.com");
+        await ApproveArtifact(feature.Id, test.Id);
 
         // Get workflow artifact content
         var workflow = await GetArtifactByType(feature.Id, "Workflow");
@@ -693,9 +675,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         var prdResponse = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null);
         var prd = await Deserialize<ArtifactDto>(prdResponse);
 
-        await _client.PostAsJsonAsync(
-            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
-            new { approvedBy = "pm@test.com" });
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
 
         var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts");
         var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
@@ -878,6 +858,110 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     // ──────────────────────────────────────────────
 
     // ──────────────────────────────────────────────
+    // Approval authorisation
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Approve_WhenCallerIsAnonymous_Returns401()
+    {
+        var project = await CreateProject("AnonApprove", "org/anon-approve");
+        var feature = await CreateFeature(project.Id, "Anonymous approval");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var anonymous = _factory.CreateClientWithToken(null);
+        var response = await anonymous.PostAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Approve_WhenCallerLacksRequiredRole_Returns403()
+    {
+        // A PRD requires PM/EM; this caller only holds QA.
+        var project = await CreateProject("QaApprovesPrd", "org/qa-approves-prd");
+        var feature = await CreateFeature(project.Id, "QA approving a PRD");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var qaOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.QaOnlyToken);
+        var response = await qaOnly.PostAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Approve_WhenCallerHoldsRequiredRole_Succeeds()
+    {
+        var project = await CreateProject("PmApprovesPrd", "org/pm-approves-prd");
+        var feature = await CreateFeature(project.Id, "PM approving a PRD");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var pmOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.PmOnlyToken);
+        var response = await pmOnly.PostAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Approve_RecordsAuthenticatedIdentity_NotACallerSuppliedName()
+    {
+        // The whole point of the gate: a caller cannot approve as someone else.
+        var project = await CreateProject("ForgedApprover", "org/forged-approver");
+        var feature = await CreateFeature(project.Id, "Forged approver identity");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var pmOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.PmOnlyToken);
+        var response = await pmOnly.PostAsJsonAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
+            new { approvedBy = "someone-else@test.com" });
+
+        response.EnsureSuccessStatusCode();
+        var approved = await Deserialize<ArtifactDto>(response);
+        Assert.Equal("pm-only@test.com", approved.ApprovedBy);
+    }
+
+    [Fact]
+    public async Task Approve_RecordsAuthenticatedIdentityOnThePipelineEvent()
+    {
+        var project = await CreateProject("AuditApprover", "org/audit-approver");
+        var feature = await CreateFeature(project.Id, "Audit trail approver");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var pmOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.PmOnlyToken);
+        await pmOnly.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null);
+
+        var events = await Deserialize<PipelineEventDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events"));
+
+        Assert.Contains(events, e => e.TriggeredBy == "pm-only@test.com");
+    }
+
+    [Fact]
+    public async Task Me_WhenAuthenticated_ReturnsIdentityAndRoles()
+    {
+        var response = await _client.GetAsync("/api/me");
+        response.EnsureSuccessStatusCode();
+
+        var me = await Deserialize<CurrentUserDto>(response);
+        Assert.Equal("pm@test.com", me.Email);
+        Assert.Contains("PmEm", me.Roles);
+        Assert.Contains("TechLead", me.Roles);
+        Assert.Contains("Qa", me.Roles);
+    }
+
+    [Fact]
+    public async Task Me_WhenAnonymous_Returns401()
+    {
+        var anonymous = _factory.CreateClientWithToken(null);
+
+        var response = await anonymous.GetAsync("/api/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
     // Webhooks
     // ──────────────────────────────────────────────
 
@@ -992,11 +1076,11 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     private async Task RunPipelineToQaApproved(Guid featureId)
     {
         var prd = await GeneratePrdAndGetArtifact(featureId);
-        await ApproveArtifact(featureId, prd.Id, "pm@test.com");
-        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Adr")).Id, "tl@test.com");
-        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Task")).Id, "tl@test.com");
-        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Pr")).Id, "tl@test.com");
-        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Test")).Id, "qa@test.com");
+        await ApproveArtifact(featureId, prd.Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Adr")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Task")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Pr")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Test")).Id);
     }
 
     private async Task<HttpResponseMessage> SendWebhook(string eventName, string json)
@@ -1047,11 +1131,9 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
         return await Deserialize<ArtifactDto>(response);
     }
 
-    private async Task ApproveArtifact(Guid featureId, Guid artifactId, string approvedBy)
+    private async Task ApproveArtifact(Guid featureId, Guid artifactId)
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/api/features/{featureId}/artifacts/{artifactId}/approve",
-            new { approvedBy });
+        var response = await _client.PostAsync($"/api/features/{featureId}/artifacts/{artifactId}/approve", null);
         response.EnsureSuccessStatusCode();
     }
 
@@ -1081,6 +1163,7 @@ public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
     private record ProjectDto(Guid Id, string Name, string Description, string RepositorySlug, DateTime CreatedAt);
     private record FeatureDto(Guid Id, Guid ProjectId, string Prompt, string Status, DateTime CreatedAt);
     private record ArtifactDto(Guid Id, Guid FeatureId, string Type, string RepositoryPath, string? ApprovedBy, DateTime? ApprovedAt);
+    private record CurrentUserDto(string Email, string DisplayName, string[] Roles);
     private record DeploymentDto(Guid Id, Guid FeatureId, string Sha, string Environment, string Status, DateTime DeployedAt);
     private record TaskItemDto(Guid Id, Guid FeatureId, string Title, string Status, string AgentType, int? ExternalIssueId, int? PrId);
     private record ContentDto(string Content);

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Zephyrus.Application.Managers;
 using Zephyrus.Application.UseCases;
@@ -37,14 +38,14 @@ public class ArtifactsController : ControllerBase
     }
 
     [HttpPost("{artifactId:guid}/approve")]
+    [Authorize]
     public async Task<IActionResult> Approve(
         Guid featureId,
         Guid artifactId,
-        [FromBody] ApproveArtifactRequest request,
         [FromServices] ApproveArtifactUseCase useCase,
         CancellationToken ct)
     {
-        var artifact = await useCase.ExecuteAsync(featureId, artifactId, request.ApprovedBy, ct);
+        var artifact = await useCase.ExecuteAsync(featureId, artifactId, ct);
 
         return Ok(new ArtifactResponse(artifact));
     }

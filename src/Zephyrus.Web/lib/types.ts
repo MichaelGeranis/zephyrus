@@ -96,3 +96,10 @@ export const STAGE_LABELS: Record<string, string> = {
   QaApproved: "QA Approved",
   Deployed: "Deployed",
 };
+
+/** The signed-in team member, as reported by the API. */
+export interface CurrentUser {
+  email: string;
+  displayName: string;
+  roles: string[];
+}

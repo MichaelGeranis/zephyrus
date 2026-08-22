@@ -267,6 +267,54 @@ GitHub sent. An unset secret rejects everything.
 
 ---
 
+## Authentication and Approval Authority
+
+The state machine decides *when* a transition is legal. Approval authority
+decides *who* may trigger it. Both are domain rules and both live in
+`Zephyrus.Core/Pipeline/`.
+
+```
+ApprovalAuthority.cs      ← which roles may approve which artifact type
+PipelineStateMachine.cs   ← which status transitions are valid
+```
+
+`TeamRole` mirrors the three roles in BUSINESS.md: `PmEm`, `TechLead`, `Qa`.
+
+| Artifact | Roles allowed to approve |
+|----------|--------------------------|
+| Prd      | PmEm |
+| Adr      | TechLead |
+| Task     | PmEm or TechLead |
+| Pr       | TechLead |
+| Test     | Qa |
+| Workflow | TechLead |
+
+**Rules:**
+- The approver is taken from the authenticated principal via `IUserContext`
+  (`Zephyrus.Core/Interfaces/`) — never from the request body. This is what makes
+  `Artifact.ApprovedBy` and `PipelineEvent.TriggeredBy` trustworthy as an audit trail.
+- An unauthenticated caller, or one whose roles do not cover the artifact type,
+  gets `UnauthorizedApprovalException` — mapped to 403 (401 when no credentials
+  were presented at all).
+- A Task artifact names two roles. An artifact is approved exactly once by one
+  person, so either role satisfies the gate; requiring two distinct sign-offs
+  would need a second approval record.
+
+### Authentication scheme
+
+`TeamToken` is a custom `AuthenticationHandler` in `Zephyrus.Api/Authentication/`.
+It matches an `Authorization: Bearer <token>` header against the configured team
+roster and issues a principal carrying the member's role claims.
+
+- The roster lives in configuration (`Team:Members`), not the database —
+  Zephyrus targets a small fixed team. Moving it to a `TeamMember` entity is a
+  contained change behind the same `IUserContext`.
+- Tokens are compared with `CryptographicOperations.FixedTimeEquals`.
+- A member with an empty configured token can never authenticate, so the shipped
+  defaults deny everyone until real tokens are supplied.
+
+---
+
 ## Orchestrator Design
 
 The Orchestrator is a **deterministic state machine — not an AI**. It:

@@ -47,6 +47,7 @@ src/
 │   │   ├── ArtifactType.cs                 — Prd, Adr, Task, Pr, Test
 │   │   ├── DeploymentStatus.cs             — Pending, Success, Failed
 │   │   ├── FeatureStatus.cs                — Pipeline statuses (Ideation → Deployed)
+│   │   ├── TeamRole.cs                     — PmEm, TechLead, Qa
 │   │   └── TaskStatus.cs                   — Pending, InProgress, PrOpen, Done
 │   ├── Exceptions/
 │   │   ├── ArtifactNotFoundException.cs    — Thrown when artifact not found
@@ -61,6 +62,7 @@ src/
 │   │   ├── IDeploymentRepository.cs        — CRUD for Deployment
 │   │   ├── IFeatureRepository.cs           — CRUD for Feature
 │   │   ├── IJobQueue.cs                    — Queues agent work for background execution
+│   │   ├── IUserContext.cs                 — The authenticated caller and their roles
 │   │   ├── ILanguageModel.cs               — Claude API abstraction (single + multi-turn)
 │   │   ├── IPipelineEventRepository.cs     — CRUD for PipelineEvent
 │   │   ├── IProjectRepository.cs           — CRUD for Project
@@ -70,6 +72,7 @@ src/
 │   │   ├── AgentJob.cs                     — A queued unit of agent work (feature + kind)
 │   │   └── AgentJobKind.cs                 — Architect, Task, Code, Qa, DevOps
 │   └── Pipeline/
+│       ├── ApprovalAuthority.cs            — Which roles may approve which artifact type
 │       └── PipelineStateMachine.cs         — Enforces valid feature status transitions
 │
 ├── Zephyrus.Application/

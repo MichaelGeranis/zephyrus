@@ -77,7 +77,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            var approved = await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+            var approved = await approve.ExecuteAsync(featureId, prdArtifactId);
 
             Assert.Equal("pm@company.com", approved.ApprovedBy);
             Assert.NotNull(approved.ApprovedAt);
@@ -168,7 +168,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+            await approve.ExecuteAsync(featureId, prdArtifactId);
         }
 
         // Get the ADR artifact ID
@@ -184,7 +184,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, adrArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, adrArtifactId);
         }
 
         // --- Assert: Full chain fired through Task Agent ---
@@ -288,7 +288,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+            await approve.ExecuteAsync(featureId, prdArtifactId);
         }
 
         // Approve ADR → triggers Task Agent
@@ -304,7 +304,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, adrArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, adrArtifactId);
         }
 
         // Approve Tasks → triggers Code Agents
@@ -320,7 +320,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, taskArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, taskArtifactId);
         }
 
         // --- Assert: Feature is now in Coding status ---
@@ -424,7 +424,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+            await approve.ExecuteAsync(featureId, prdArtifactId);
         }
 
         Guid adrArtifactId;
@@ -437,7 +437,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, adrArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, adrArtifactId);
         }
 
         Guid taskArtifactId;
@@ -450,7 +450,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, taskArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, taskArtifactId);
         }
 
         // Feature should now be in Coding (Code Agent has run)
@@ -472,7 +472,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, prArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, prArtifactId);
         }
 
         // --- Assert: Feature is now in QaPending, QA Agent has run ---
@@ -560,7 +560,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+            await approve.ExecuteAsync(featureId, prdArtifactId);
         }
 
         Guid adrArtifactId;
@@ -573,7 +573,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, adrArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, adrArtifactId);
         }
 
         Guid taskArtifactId;
@@ -586,7 +586,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, taskArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, taskArtifactId);
         }
 
         // Approve Pr → triggers QA Agent
@@ -600,7 +600,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, prArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, prArtifactId);
         }
 
         // Feature should now be in QaPending
@@ -622,7 +622,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, testArtifactId, "qa@company.com");
+            await approve.ExecuteAsync(featureId, testArtifactId);
         }
 
         // --- Assert: Feature is now in QaApproved, DevOps Agent has run ---
@@ -663,7 +663,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, workflowArtifactId, "tech-lead@company.com");
+            await approve.ExecuteAsync(featureId, workflowArtifactId);
         }
 
         // --- Assert: approving the workflow reviews the config but ships nothing ---
@@ -765,7 +765,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
 
             // Feature is in Ideation, but PRD approval requires PrdPending
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => approve.ExecuteAsync(featureId, artifactId, "user@test.com"));
+                () => approve.ExecuteAsync(featureId, artifactId));
 
             Assert.Contains("PrdPending", ex.Message);
         }
@@ -797,7 +797,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
         using (var scope = _fixture.CreateScope())
         {
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
-            await approve.ExecuteAsync(featureId, prdArtifactId, "pm@company.com");
+            await approve.ExecuteAsync(featureId, prdArtifactId);
         }
 
         // Second approval — should fail (already approved)
@@ -806,7 +806,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             var approve = scope.ServiceProvider.GetRequiredService<ApproveArtifactUseCase>();
 
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => approve.ExecuteAsync(featureId, prdArtifactId, "another@company.com"));
+                () => approve.ExecuteAsync(featureId, prdArtifactId));
 
             Assert.Contains("already been approved", ex.Message);
         }

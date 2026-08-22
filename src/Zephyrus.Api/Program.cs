@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Authentication;
+using Zephyrus.Api.Authentication;
 using Zephyrus.Api.Middleware;
 using Zephyrus.Api.Webhooks;
+using Zephyrus.Core.Interfaces;
 using Zephyrus.Application;
 using Zephyrus.Infrastructure;
 
@@ -10,6 +13,18 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString, builder.Configuration);
+// Authentication — the approver identity on every approval comes from here,
+// never from the request body.
+builder.Services.Configure<TeamOptions>(builder.Configuration.GetSection(TeamOptions.SectionName));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IUserContext, HttpUserContext>();
+builder.Services
+    .AddAuthentication(TeamTokenAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, TeamTokenAuthenticationHandler>(
+        TeamTokenAuthenticationHandler.SchemeName, null);
+builder.Services.AddAuthorization();
+
+// Inbound webhooks authenticate by payload signature, not by the scheme above.
 builder.Services.Configure<GitHubWebhookOptions>(
     builder.Configuration.GetSection(GitHubWebhookOptions.SectionName));
 
@@ -43,6 +58,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
