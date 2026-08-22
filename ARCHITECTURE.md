@@ -97,7 +97,7 @@ Api → Application → Core ← Infrastructure
 - EF Core: `ZephyrusDbContext`, migrations, repository implementations
 - Octokit.net: `GitHubCodeHost` implementing `ICodeHost`
 - Claude API: `ClaudeLanguageModel` implementing `ILanguageModel`
-- Hangfire: job queue wiring and background service implementations
+- Job queue: `BackgroundJobQueue` implementing `IJobQueue`, plus the `AgentJobWorker` background service
 - Agent implementations: `PrdAgent`, `ArchitectAgent`, etc. (the actual Claude API calls)
 
 **What does NOT belong here:**
@@ -111,7 +111,7 @@ Zephyrus.Infrastructure/
   Persistence/        ← EF Core DbContext, migrations, repositories
   GitHub/             ← Octokit.net implementations
   AI/                 ← Claude API HttpClient wrapper, agent implementations
-  Jobs/               ← Hangfire job definitions
+  Jobs/               ← Job queue and the background worker that runs agent jobs
 ```
 
 ### Zephyrus.Api — Interface Adapters Layer (thin)
@@ -249,21 +249,47 @@ The Orchestrator is a **deterministic state machine — not an AI**. It:
 5. Persists state transitions to `PipelineEvent`
 
 ```csharp
-// Pseudocode — the core orchestration logic
-public async Task OnArtifactApproved(Guid featureId, ArtifactType type)
+// The orchestrator maps a status to a job and queues it. It never runs an agent.
+public async Task OnArtifactApprovedAsync(Guid featureId, FeatureStatus newStatus, CancellationToken ct)
 {
-    var feature = await _repo.GetFeatureAsync(featureId);
-    var nextStatus = _stateMachine.GetNextStatus(feature.Status);
+    if (!TriggerMap.TryGetValue(newStatus, out var kind))
+        return;
 
-    if (await AllDependenciesMet(feature, nextStatus))
-    {
-        await _jobQueue.EnqueueAsync(new AgentJob(featureId, nextStatus));
-        await _repo.UpdateStatusAsync(featureId, nextStatus);
-    }
+    await _jobQueue.EnqueueAsync(new AgentJob(featureId, kind), ct);
 }
 ```
 
 **Key rule:** Agents are stateless. The Orchestrator is stateful. Never put state inside an agent.
+
+### Background execution
+
+Agent runs take minutes — the Code Agent runs one pass per task, plus up to
+three follow-up passes each — so they must never execute inside the HTTP request
+that triggered them.
+
+```
+Approve request ──> ApproveArtifactUseCase ──> PipelineOrchestrator
+                              │                        │
+                    advance + audit event         IJobQueue.EnqueueAsync
+                              │                        │
+                       response returns         BackgroundJobQueue (channel)
+                                                       │
+                                                 AgentJobWorker
+                                              (own DI scope per job)
+                                                       │
+                                              IAgentJobDispatcher ──> Invoke*AgentUseCase
+```
+
+- `IJobQueue` and `IAgentJobDispatcher` live in `Zephyrus.Core`, so
+  `Infrastructure` runs jobs without ever referencing `Application`.
+- The worker creates a **new DI scope per job**. The request scope that enqueued
+  the job is already disposed by the time the job runs.
+- A job that throws is logged and dropped. The feature keeps its current status,
+  so recovery is the existing `rerun-step` endpoint.
+- The queue is in-process and in-memory: jobs still queued when the process stops
+  are lost, and are recovered by re-running the step. Swapping in a durable
+  backend (Hangfire, or a Postgres-backed queue) means replacing
+  `BackgroundJobQueue` behind `IJobQueue` — nothing else changes.
 
 ---
 

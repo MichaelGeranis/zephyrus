@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Zephyrus.Core.Interfaces;
+using Zephyrus.Infrastructure.Jobs;
 using Zephyrus.Infrastructure.Persistence;
 using Zephyrus.IntegrationTests.Fakes;
 
@@ -43,6 +44,12 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
             RemoveService<ILanguageModel>(services);
             RemoveService<IPromptLoader>(services);
 
+            // Remove the background job queue and its worker — tests run agent
+            // jobs inline so the cascade completes before the assertion.
+            RemoveService<IJobQueue>(services);
+            RemoveImplementation<AgentJobWorker>(services);
+            services.AddScoped<IJobQueue, InlineJobQueue>();
+
             // Add SQLite in-memory database
             services.AddDbContext<ZephyrusDbContext>(options =>
                 options.UseSqlite(_connection));
@@ -63,6 +70,13 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
     private static void RemoveService<T>(IServiceCollection services)
     {
         var descriptors = services.Where(d => d.ServiceType == typeof(T)).ToList();
+        foreach (var d in descriptors)
+            services.Remove(d);
+    }
+
+    private static void RemoveImplementation<T>(IServiceCollection services)
+    {
+        var descriptors = services.Where(d => d.ImplementationType == typeof(T)).ToList();
         foreach (var d in descriptors)
             services.Remove(d);
     }

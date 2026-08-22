@@ -1,73 +1,63 @@
 using Microsoft.Extensions.Logging;
 using Zephyrus.Core.Enums;
-using Zephyrus.Application.UseCases;
+using Zephyrus.Core.Interfaces;
+using Zephyrus.Core.Jobs;
 
 namespace Zephyrus.Application.Orchestration;
 
 /// <summary>
-/// Deterministic orchestrator — not an AI. Reacts to approval events
-/// by invoking the next agent in the pipeline. Agents are stateless;
-/// all state lives in the database and GitHub.
+/// Deterministic orchestrator — not an AI. Reacts to approval events by
+/// queueing the next agent in the pipeline. Agents are stateless; all state
+/// lives in the database and GitHub.
 /// </summary>
+/// <remarks>
+/// The orchestrator only ever <em>enqueues</em>. Agent runs are long (minutes,
+/// and for the Code Agent one pass per task) so they must not execute inside
+/// the approval request that triggered them.
+/// </remarks>
 public sealed class PipelineOrchestrator
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IJobQueue _jobQueue;
     private readonly ILogger<PipelineOrchestrator> _logger;
 
+    /// <summary>
+    /// The trigger map: which pipeline status queues which agent.
+    /// A status absent from this map has no follow-up agent.
+    /// </summary>
+    private static readonly Dictionary<FeatureStatus, AgentJobKind> TriggerMap = new()
+    {
+        { FeatureStatus.PrdApproved, AgentJobKind.Architect },
+        { FeatureStatus.ArchApproved, AgentJobKind.Task },
+        { FeatureStatus.TasksApproved, AgentJobKind.Code },
+        { FeatureStatus.QaPending, AgentJobKind.Qa },
+        { FeatureStatus.QaApproved, AgentJobKind.DevOps },
+    };
+
     public PipelineOrchestrator(
-        IServiceProvider serviceProvider,
+        IJobQueue jobQueue,
         ILogger<PipelineOrchestrator> logger)
     {
-        _serviceProvider = serviceProvider;
+        _jobQueue = jobQueue;
         _logger = logger;
     }
 
     /// <summary>
     /// Called after an artifact is approved and the feature has advanced.
-    /// Determines whether a follow-up agent should be triggered and invokes it.
+    /// Queues the follow-up agent for the new status, if the trigger map has one.
     /// </summary>
     public async Task OnArtifactApprovedAsync(Guid featureId, FeatureStatus newStatus, CancellationToken ct = default)
     {
-        switch (newStatus)
+        if (!TriggerMap.TryGetValue(newStatus, out var kind))
         {
-            case FeatureStatus.PrdApproved:
-                _logger.LogInformation("Feature {FeatureId}: PRD approved, triggering Architect Agent.", featureId);
-                var architectUseCase = GetRequiredService<InvokeArchitectAgentUseCase>();
-                await architectUseCase.ExecuteAsync(featureId, ct: ct);
-                break;
-
-            case FeatureStatus.ArchApproved:
-                _logger.LogInformation("Feature {FeatureId}: ADR approved, triggering Task Agent.", featureId);
-                var taskUseCase = GetRequiredService<InvokeTaskAgentUseCase>();
-                await taskUseCase.ExecuteAsync(featureId, ct: ct);
-                break;
-
-            case FeatureStatus.TasksApproved:
-                _logger.LogInformation("Feature {FeatureId}: Tasks approved, triggering Code Agents.", featureId);
-                var codeUseCase = GetRequiredService<InvokeCodeAgentUseCase>();
-                await codeUseCase.ExecuteAsync(featureId, ct: ct);
-                break;
-
-            case FeatureStatus.QaPending:
-                _logger.LogInformation("Feature {FeatureId}: PRs approved, triggering QA Agent.", featureId);
-                var qaUseCase = GetRequiredService<InvokeQaAgentUseCase>();
-                await qaUseCase.ExecuteAsync(featureId, ct: ct);
-                break;
-
-            case FeatureStatus.QaApproved:
-                _logger.LogInformation("Feature {FeatureId}: Tests approved, triggering DevOps Agent.", featureId);
-                var devOpsUseCase = GetRequiredService<InvokeDevOpsAgentUseCase>();
-                await devOpsUseCase.ExecuteAsync(featureId, ct: ct);
-                break;
-
-            default:
-                _logger.LogDebug("Feature {FeatureId}: No follow-up agent for status {Status}.", featureId, newStatus);
-                break;
+            _logger.LogDebug(
+                "Feature {FeatureId}: no follow-up agent for status {Status}.", featureId, newStatus);
+            return;
         }
-    }
 
-    private T GetRequiredService<T>() where T : notnull
-    {
-        return (T)_serviceProvider.GetService(typeof(T))!;
+        await _jobQueue.EnqueueAsync(new AgentJob(featureId, kind), ct);
+
+        _logger.LogInformation(
+            "Feature {FeatureId}: status {Status} reached, queued {Kind} agent job.",
+            featureId, newStatus, kind);
     }
 }

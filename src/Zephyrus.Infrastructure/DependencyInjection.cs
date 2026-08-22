@@ -6,6 +6,7 @@ using Zephyrus.Core.Interfaces;
 using Zephyrus.Infrastructure.AI;
 using Zephyrus.Infrastructure.AI.Agents;
 using Zephyrus.Infrastructure.GitHub;
+using Zephyrus.Infrastructure.Jobs;
 using Zephyrus.Infrastructure.Persistence;
 using Zephyrus.Infrastructure.Persistence.Repositories;
 
@@ -30,6 +31,12 @@ public static class DependencyInjection
         services.AddScoped<ITaskItemRepository, TaskItemRepository>();
         services.AddScoped<IPipelineEventRepository, PipelineEventRepository>();
         services.AddScoped<IAgentInvocationRepository, AgentInvocationRepository>();
+
+        // Job queue — agent work runs on a background worker, never inside the
+        // request that triggered it.
+        services.AddSingleton<BackgroundJobQueue>();
+        services.AddSingleton<IJobQueue>(sp => sp.GetRequiredService<BackgroundJobQueue>());
+        services.AddHostedService<AgentJobWorker>();
 
         // GitHub
         services.AddSingleton<ICodeHostFactory, GitHubCodeHostFactory>();

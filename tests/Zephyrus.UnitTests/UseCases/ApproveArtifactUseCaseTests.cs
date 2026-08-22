@@ -1,10 +1,10 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Zephyrus.Application.Orchestration;
 using Zephyrus.Application.UseCases;
 using Zephyrus.Core.Entities;
 using Zephyrus.Core.Enums;
 using Zephyrus.Core.Exceptions;
+using Zephyrus.UnitTests.Jobs;
 
 namespace Zephyrus.UnitTests.UseCases;
 
@@ -17,13 +17,10 @@ public class ApproveArtifactUseCaseTests
 
     public ApproveArtifactUseCaseTests()
     {
-        // Build orchestrator with an empty service provider — only used for statuses
-        // that trigger follow-up agents. Tests below use the Deployed path which
-        // falls through to the default/no-op branch.
-        var services = new ServiceCollection();
-        services.AddLogging();
-        var sp = services.BuildServiceProvider();
-        var orchestrator = new PipelineOrchestrator(sp, sp.GetRequiredService<ILogger<PipelineOrchestrator>>());
+        // The orchestrator only queues follow-up agent work, so a recording queue
+        // is enough here — agents are exercised by the integration tests.
+        var orchestrator = new PipelineOrchestrator(
+            new RecordingJobQueue(), NullLogger<PipelineOrchestrator>.Instance);
 
         _sut = new ApproveArtifactUseCase(_featureRepo, _artifactRepo, _eventRepo, orchestrator);
     }

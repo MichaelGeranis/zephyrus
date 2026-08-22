@@ -53,16 +53,21 @@ src/
 │   │   └── InvalidTransitionException.cs   — Thrown on invalid state machine transition
 │   ├── Interfaces/
 │   │   ├── IAgentInvocationRepository.cs   — CRUD for AgentInvocation
+│   │   ├── IAgentJobDispatcher.cs          — Routes a queued AgentJob to its use case
 │   │   ├── IAgentRunner.cs                 — Generic agent execution interface
 │   │   ├── IArtifactRepository.cs          — CRUD for Artifact
 │   │   ├── ICodeHost.cs                    — GitHub operations (branches, files, PRs, issues)
 │   │   ├── ICodeHostFactory.cs             — Factory for per-project ICodeHost instances
 │   │   ├── IFeatureRepository.cs           — CRUD for Feature
+│   │   ├── IJobQueue.cs                    — Queues agent work for background execution
 │   │   ├── ILanguageModel.cs               — Claude API abstraction (single + multi-turn)
 │   │   ├── IPipelineEventRepository.cs     — CRUD for PipelineEvent
 │   │   ├── IProjectRepository.cs           — CRUD for Project
 │   │   ├── IPromptLoader.cs                — Load system prompts from files
 │   │   └── ITaskItemRepository.cs          — CRUD for TaskItem
+│   ├── Jobs/
+│   │   ├── AgentJob.cs                     — A queued unit of agent work (feature + kind)
+│   │   └── AgentJobKind.cs                 — Architect, Task, Code, Qa, DevOps
 │   └── Pipeline/
 │       └── PipelineStateMachine.cs         — Enforces valid feature status transitions
 │
@@ -73,7 +78,8 @@ src/
 │   │   ├── FeatureManager.cs               — Feature CRUD and listing
 │   │   └── ProjectManager.cs               — Project CRUD and listing
 │   ├── Orchestration/
-│   │   └── PipelineOrchestrator.cs         — Routes approval events to agent invocations
+│   │   ├── AgentJobDispatcher.cs           — Runs a queued AgentJob via the matching use case
+│   │   └── PipelineOrchestrator.cs         — Queues the next agent job on approval
 │   └── UseCases/
 │       ├── ApproveArtifactUseCase.cs       — Approve artifact and advance pipeline
 │       ├── InvokeArchitectAgentUseCase.cs  — Orchestrate ADR generation
@@ -99,6 +105,10 @@ src/
 │   │   ├── ClaudeLanguageModel.cs          — ILanguageModel implementation (Anthropic API)
 │   │   ├── ClaudeLanguageModelOptions.cs   — Configuration options (model, key, max tokens)
 │   │   └── FilePromptLoader.cs             — Loads prompts from prompts/ directory
+│   ├── Jobs/
+│   │   ├── AgentJobWorker.cs               — BackgroundService draining the queue, one DI scope per job
+│   │   ├── BackgroundJobQueue.cs           — In-process IJobQueue backed by a channel
+│   │   └── InlineJobQueue.cs               — Runs jobs inline (tests only)
 │   ├── GitHub/
 │   │   ├── GitHubCodeHost.cs               — ICodeHost implementation (Octokit.net)
 │   │   └── GitHubCodeHostFactory.cs        — Creates GitHubCodeHost per project token

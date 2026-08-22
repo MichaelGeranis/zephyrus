@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Build and test (.NET)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore Zephyrus.sln
+
+      - name: Build
+        run: dotnet build Zephyrus.sln --no-restore --configuration Release
+
+      # Run each test project as its own step so both report separately — a
+      # single solution-wide run makes it hard to tell whether a project was
+      # actually executed.
+      - name: Test (unit)
+        run: dotnet test tests/Zephyrus.UnitTests/Zephyrus.UnitTests.csproj --no-build --configuration Release
+
+      - name: Test (integration)
+        run: dotnet test tests/Zephyrus.IntegrationTests/Zephyrus.IntegrationTests.csproj --no-build --configuration Release

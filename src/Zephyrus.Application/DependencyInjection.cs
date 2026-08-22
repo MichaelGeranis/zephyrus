@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Zephyrus.Application.Managers;
 using Zephyrus.Application.Orchestration;
 using Zephyrus.Application.UseCases;
+using Zephyrus.Core.Interfaces;
 
 namespace Zephyrus.Application;
 
@@ -19,6 +20,7 @@ public static class DependencyInjection
 
         // Orchestrator
         services.AddScoped<PipelineOrchestrator>();
+        services.AddScoped<IAgentJobDispatcher, AgentJobDispatcher>();
 
         // Use cases (orchestration-heavy operations)
         services.AddScoped<InvokePrdAgentUseCase>();
