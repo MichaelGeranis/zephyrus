@@ -96,10 +96,8 @@ public class ApproveArtifactUseCaseTests
     // ── Happy path ────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WhenWorkflowApproved_MarksArtifactAndAdvancesToDeployed()
+    public async Task ExecuteAsync_WhenWorkflowApproved_MarksArtifactApproved()
     {
-        // Workflow approval transitions QaApproved → Deployed.
-        // Orchestrator receives Deployed which falls into the default/no-op branch.
         var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.QaApproved);
         await _featureRepo.AddAsync(feature);
 
@@ -110,11 +108,27 @@ public class ApproveArtifactUseCaseTests
 
         Assert.Equal("tl@test.com", result.ApprovedBy);
         Assert.NotNull(result.ApprovedAt);
-        Assert.Equal(FeatureStatus.Deployed, feature.Status);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenWorkflowApproved_RecordsPipelineEvent()
+    public async Task ExecuteAsync_WhenWorkflowApproved_ShouldNotAdvanceToDeployed()
+    {
+        // Approving the generated workflow reviews the CI/CD config. Nothing has
+        // shipped, so the feature must stay at QaApproved until a deployment
+        // actually succeeds.
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.QaApproved);
+        await _featureRepo.AddAsync(feature);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Workflow);
+        await _artifactRepo.AddAsync(artifact);
+
+        await _sut.ExecuteAsync(feature.Id, artifact.Id, "tl@test.com");
+
+        Assert.Equal(FeatureStatus.QaApproved, feature.Status);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenWorkflowApproved_ShouldNotRecordAPipelineEvent()
     {
         var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.QaApproved);
         await _featureRepo.AddAsync(feature);
@@ -124,11 +138,7 @@ public class ApproveArtifactUseCaseTests
 
         await _sut.ExecuteAsync(feature.Id, artifact.Id, "tl@test.com");
 
-        var events = _eventRepo.All;
-        Assert.Single(events);
-        Assert.Equal(FeatureStatus.QaApproved, events[0].FromStatus);
-        Assert.Equal(FeatureStatus.Deployed, events[0].ToStatus);
-        Assert.Equal("tl@test.com", events[0].TriggeredBy);
+        Assert.Empty(_eventRepo.All);
     }
 
     [Fact]

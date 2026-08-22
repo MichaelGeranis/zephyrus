@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Zephyrus.Core.Interfaces;
 using Zephyrus.Infrastructure.Jobs;
@@ -16,6 +17,9 @@ namespace Zephyrus.IntegrationTests;
 /// </summary>
 public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
 {
+    /// <summary>Webhook secret the tests sign their deliveries with.</summary>
+    public const string WebhookSecret = "test-webhook-secret";
+
     private readonly SqliteConnection _connection;
 
     public FakeCodeHost FakeCodeHost { get; } = new();
@@ -30,6 +34,14 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["GitHub:Webhook:Secret"] = WebhookSecret,
+            });
+        });
 
         builder.ConfigureServices(services =>
         {

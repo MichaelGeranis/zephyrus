@@ -652,7 +652,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             Assert.StartsWith(".github/workflows/", workflowArtifact!.RepositoryPath);
         }
 
-        // --- Act 2: Approve Workflow artifact → feature advances to Deployed ---
+        // --- Act 2: Approve the Workflow artifact (a review of the CI/CD config) ---
         Guid workflowArtifactId;
         using (var scope = _fixture.CreateScope())
         {
@@ -666,7 +666,39 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             await approve.ExecuteAsync(featureId, workflowArtifactId, "tech-lead@company.com");
         }
 
-        // --- Assert: Feature is now Deployed ---
+        // --- Assert: approving the workflow reviews the config but ships nothing ---
+        using (var scope = _fixture.CreateScope())
+        {
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+            var feature = await featureRepo.GetByIdAsync(featureId);
+
+            Assert.NotNull(feature);
+            Assert.Equal(FeatureStatus.QaApproved, feature!.Status);
+        }
+
+        // --- Act 3: the PR merges and the deployment succeeds ---
+        const string mergeSha = "0fbc1a2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b";
+        using (var scope = _fixture.CreateScope())
+        {
+            var projectRepo = scope.ServiceProvider.GetRequiredService<IProjectRepository>();
+            var taskRepo = scope.ServiceProvider.GetRequiredService<ITaskItemRepository>();
+            var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
+
+            var feature = await featureRepo.GetByIdAsync(featureId);
+            var project = await projectRepo.GetByIdAsync(feature!.ProjectId);
+            var task = (await taskRepo.GetByFeatureIdAsync(featureId)).First(t => t.PrId is not null);
+
+            var prClosed = scope.ServiceProvider.GetRequiredService<HandlePullRequestClosedUseCase>();
+            await prClosed.ExecuteAsync(project!.RepositorySlug, task.PrId!.Value, merged: true, mergeSha);
+        }
+
+        using (var scope = _fixture.CreateScope())
+        {
+            var deployed = scope.ServiceProvider.GetRequiredService<HandleDeploymentStatusUseCase>();
+            await deployed.ExecuteAsync(mergeSha, "success");
+        }
+
+        // --- Assert: Feature is now Deployed, backed by a real deployment record ---
         using (var scope = _fixture.CreateScope())
         {
             var featureRepo = scope.ServiceProvider.GetRequiredService<IFeatureRepository>();
@@ -674,6 +706,11 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
 
             Assert.NotNull(feature);
             Assert.Equal(FeatureStatus.Deployed, feature!.Status);
+
+            var deploymentRepo = scope.ServiceProvider.GetRequiredService<IDeploymentRepository>();
+            var deployment = Assert.Single(await deploymentRepo.GetByFeatureIdAsync(featureId));
+            Assert.Equal(mergeSha, deployment.Sha);
+            Assert.Equal(DeploymentStatus.Success, deployment.Status);
         }
 
         // Pipeline events: 10 transitions (full pipeline)
@@ -691,7 +728,7 @@ public class PipelineIntegrationTests : IClassFixture<PipelineFixture>
             // 7. TasksApproved → Coding
             // 8. Coding → QaPending
             // 9. QaPending → QaApproved
-            // 10. QaApproved → Deployed
+            // 10. QaApproved → Deployed (recorded when the deployment succeeded)
             Assert.Equal(10, events.Count);
             Assert.Equal(FeatureStatus.QaApproved, events[9].FromStatus);
             Assert.Equal(FeatureStatus.Deployed, events[9].ToStatus);

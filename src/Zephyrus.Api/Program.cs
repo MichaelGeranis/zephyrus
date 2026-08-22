@@ -1,4 +1,5 @@
 using Zephyrus.Api.Middleware;
+using Zephyrus.Api.Webhooks;
 using Zephyrus.Application;
 using Zephyrus.Infrastructure;
 
@@ -9,6 +10,9 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString, builder.Configuration);
+builder.Services.Configure<GitHubWebhookOptions>(
+    builder.Configuration.GetSection(GitHubWebhookOptions.SectionName));
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

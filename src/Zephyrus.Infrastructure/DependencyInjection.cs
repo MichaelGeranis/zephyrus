@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<ITaskItemRepository, TaskItemRepository>();
         services.AddScoped<IPipelineEventRepository, PipelineEventRepository>();
         services.AddScoped<IAgentInvocationRepository, AgentInvocationRepository>();
+        services.AddScoped<IDeploymentRepository, DeploymentRepository>();
 
         // Job queue — agent work runs on a background worker, never inside the
         // request that triggered it.

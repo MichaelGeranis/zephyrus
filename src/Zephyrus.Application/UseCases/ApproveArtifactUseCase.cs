@@ -33,6 +33,17 @@ public sealed class ApproveArtifactUseCase
         { ArtifactType.Workflow, FeatureStatus.QaApproved },
     };
 
+    /// <summary>
+    /// Artifact types whose approval records a review but does not move the
+    /// pipeline. Approving the generated CI/CD workflow says the config is good,
+    /// not that anything shipped — the feature reaches Deployed only when a real
+    /// deployment succeeds.
+    /// </summary>
+    private static readonly HashSet<ArtifactType> NonAdvancingArtifacts = new()
+    {
+        ArtifactType.Workflow,
+    };
+
     public ApproveArtifactUseCase(
         IFeatureRepository featureRepository,
         IArtifactRepository artifactRepository,
@@ -90,6 +101,9 @@ public sealed class ApproveArtifactUseCase
         // If the pipeline has already advanced past this step (force-rerun scenario),
         // only mark the artifact — do not re-advance the pipeline or re-trigger the orchestrator.
         if (isPastRequiredStatus)
+            return artifact;
+
+        if (NonAdvancingArtifacts.Contains(artifact.Type))
             return artifact;
 
         // Advance pipeline: e.g. PrdPending → PrdApproved
