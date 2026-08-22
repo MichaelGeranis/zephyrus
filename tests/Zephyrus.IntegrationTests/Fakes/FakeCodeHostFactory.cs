@@ -14,5 +14,12 @@ public sealed class FakeCodeHostFactory : ICodeHostFactory
         _codeHost = codeHost;
     }
 
-    public ICodeHost Create(string token) => _codeHost;
+    /// <summary>The token most recently passed to <see cref="Create"/>.</summary>
+    public string? LastToken { get; private set; }
+
+    public ICodeHost Create(string token)
+    {
+        LastToken = token;
+        return _codeHost;
+    }
 }

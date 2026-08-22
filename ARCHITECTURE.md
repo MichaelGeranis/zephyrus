@@ -256,6 +256,25 @@ deployment_status success ──> Deployment → Success
 - A failed deployment marks the `Deployment` failed and leaves the feature at
   `QaApproved`, so a later attempt can still carry it forward.
 
+### Secrets at rest
+
+`Project.GitHubToken` is a code-host credential, so it is encrypted in the
+database rather than stored as written.
+
+- `ISecretProtector` (Core) is implemented by `DataProtectionSecretProtector`
+  (Infrastructure) over ASP.NET Core Data Protection.
+- It is applied as an EF Core value conversion on the `github_token` column, so
+  entities always hold the plaintext and none of the ten call sites that pass
+  the token to `ICodeHostFactory` had to change.
+- Stored values carry an `enc:v1:` prefix. A value without it is a token written
+  before encryption existed: it is read back as-is and re-written encrypted the
+  next time its project is saved, so no data migration is needed. A prefixed
+  value that fails to decrypt throws rather than returning ciphertext.
+- **The key ring is operational state.** Set `DataProtection:KeyPath` to a
+  durable, backed-up directory. The default location lives under the host user
+  profile and is lost when a container is replaced — and losing the keys means
+  every stored token must be re-entered.
+
 ### Webhook authenticity
 
 `POST /api/webhooks/github` is a public endpoint, so the payload signature is

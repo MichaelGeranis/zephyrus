@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Zephyrus.Application;
 using Zephyrus.Core.Agents;
@@ -7,6 +8,7 @@ using Zephyrus.Core.Interfaces;
 using Zephyrus.Infrastructure.AI.Agents;
 using Zephyrus.Infrastructure.Jobs;
 using Zephyrus.Infrastructure.Persistence;
+using Zephyrus.Infrastructure.Security;
 using Zephyrus.Infrastructure.Persistence.Repositories;
 using Zephyrus.IntegrationTests.Fakes;
 
@@ -37,6 +39,10 @@ public sealed class PipelineFixture : IDisposable
         var services = new ServiceCollection();
 
         services.AddLogging();
+
+        // Secret protection for the encrypted project token column
+        services.AddDataProtection().SetApplicationName("Zephyrus.Tests");
+        services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 
         // Database — all scopes share the same open connection
         services.AddDbContext<ZephyrusDbContext>(options =>

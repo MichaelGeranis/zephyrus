@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,7 @@ using Zephyrus.Infrastructure.GitHub;
 using Zephyrus.Infrastructure.Jobs;
 using Zephyrus.Infrastructure.Persistence;
 using Zephyrus.Infrastructure.Persistence.Repositories;
+using Zephyrus.Infrastructure.Security;
 
 
 namespace Zephyrus.Infrastructure;
@@ -20,6 +22,19 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString, IConfiguration configuration)
     {
+        // Secret protection — must be registered before the DbContext, which
+        // depends on it to encrypt the project token column.
+        var dataProtection = services.AddDataProtection().SetApplicationName("Zephyrus");
+
+        // Key ring location. Without this the keys live under the host user
+        // profile, which is lost when a container is replaced — and losing them
+        // means stored tokens can no longer be decrypted.
+        var keyPath = configuration["DataProtection:KeyPath"];
+        if (!string.IsNullOrWhiteSpace(keyPath))
+            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+
+        services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
+
         // Database
         services.AddDbContext<ZephyrusDbContext>(options =>
             options.UseNpgsql(connectionString));

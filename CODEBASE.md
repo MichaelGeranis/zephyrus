@@ -67,6 +67,7 @@ src/
 │   │   ├── IPipelineEventRepository.cs     — CRUD for PipelineEvent
 │   │   ├── IProjectRepository.cs           — CRUD for Project
 │   │   ├── IPromptLoader.cs                — Load system prompts from files
+│   │   ├── ISecretProtector.cs             — Encrypts secrets stored in the database
 │   │   └── ITaskItemRepository.cs          — CRUD for TaskItem
 │   ├── Jobs/
 │   │   ├── AgentJob.cs                     — A queued unit of agent work (feature + kind)
@@ -115,6 +116,8 @@ src/
 │   │   ├── AgentJobWorker.cs               — BackgroundService draining the queue, one DI scope per job
 │   │   ├── BackgroundJobQueue.cs           — In-process IJobQueue backed by a channel
 │   │   └── InlineJobQueue.cs               — Runs jobs inline (tests only)
+│   ├── Security/
+│   │   └── DataProtectionSecretProtector.cs — ISecretProtector via ASP.NET Data Protection
 │   ├── GitHub/
 │   │   ├── GitHubCodeHost.cs               — ICodeHost implementation (Octokit.net)
 │   │   └── GitHubCodeHostFactory.cs        — Creates GitHubCodeHost per project token
