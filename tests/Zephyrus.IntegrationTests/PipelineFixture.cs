@@ -5,6 +5,7 @@ using Zephyrus.Application;
 using Zephyrus.Core.Agents;
 using Zephyrus.Core.Interfaces;
 using Zephyrus.Infrastructure.AI.Agents;
+using Zephyrus.Infrastructure.Jobs;
 using Zephyrus.Infrastructure.Persistence;
 using Zephyrus.Infrastructure.Persistence.Repositories;
 using Zephyrus.IntegrationTests.Fakes;
@@ -64,6 +65,9 @@ public sealed class PipelineFixture : IDisposable
 
         // Application layer (managers, orchestrator, use cases)
         services.AddApplication();
+
+        // Run queued agent jobs inline so the cascade is deterministic in tests.
+        services.AddScoped<IJobQueue, InlineJobQueue>();
 
         ServiceProvider = services.BuildServiceProvider();
 
