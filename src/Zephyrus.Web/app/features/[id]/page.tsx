@@ -157,7 +157,7 @@ export default function FeatureDetailPage() {
       {canRerun && (
         <div className="mb-6">
           <button
-            onClick={handleRerunStep}
+            onClick={() => handleRerunStep()}
             disabled={generating}
             className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 disabled:opacity-50"
           >
