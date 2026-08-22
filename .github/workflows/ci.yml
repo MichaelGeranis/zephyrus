@@ -22,5 +22,11 @@ jobs:
       - name: Build
         run: dotnet build Zephyrus.sln --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test Zephyrus.sln --no-build --configuration Release --verbosity normal
+      # Run each test project as its own step so both report separately — a
+      # single solution-wide run makes it hard to tell whether a project was
+      # actually executed.
+      - name: Test (unit)
+        run: dotnet test tests/Zephyrus.UnitTests/Zephyrus.UnitTests.csproj --no-build --configuration Release
+
+      - name: Test (integration)
+        run: dotnet test tests/Zephyrus.IntegrationTests/Zephyrus.IntegrationTests.csproj --no-build --configuration Release
