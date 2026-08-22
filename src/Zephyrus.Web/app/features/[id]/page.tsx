@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -23,7 +23,7 @@ export default function FeatureDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  function loadData() {
+  const loadData = useCallback(() => {
     Promise.all([
       api.getFeature(id),
       api.getArtifacts(id),
@@ -39,11 +39,11 @@ export default function FeatureDetailPage() {
         setInvocations(inv);
       })
       .finally(() => setLoading(false));
-  }
+  }, [id]);
 
   useEffect(() => {
     loadData();
-  }, [id]);
+  }, [loadData]);
 
   async function handleGeneratePrd() {
     setGenerating(true);
