@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { loadFeatureData } from "@/lib/featureData";
 import { StatusBadge, PipelineProgress } from "@/components/StatusBadge";
 import { AuditExportButton } from "@/components/AuditExportButton";
 import { DeleteButton } from "@/components/ui/DeleteButton";
@@ -29,23 +30,15 @@ export default function FeatureDetailPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const loadData = useCallback(() => {
-    Promise.all([
-      api.getFeature(id),
-      api.getArtifacts(id),
-      api.getTasks(id),
-      api.getPipelineEvents(id),
-      api.getAgentInvocations(id),
-      api.getAgentJobs(id),
-      api.getFeatureUsage(id),
-    ])
-      .then(([f, a, t, e, inv, jobs, use]) => {
-        setFeature(f);
-        setArtifacts(a);
-        setTasks(t);
-        setEvents(e);
-        setInvocations(inv);
-        setAgentJobs(jobs);
-        setUsage(use);
+    loadFeatureData(id)
+      .then((data) => {
+        setFeature(data.feature);
+        setArtifacts(data.artifacts);
+        setTasks(data.tasks);
+        setEvents(data.events);
+        setInvocations(data.invocations);
+        setAgentJobs(data.agentJobs);
+        setUsage(data.usage);
       })
       .finally(() => setLoading(false));
   }, [id]);

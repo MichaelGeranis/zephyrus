@@ -44,6 +44,13 @@ under **Changed**.
 - Dependabot sends one grouped PR per ecosystem each week, and skips EF Core
   11, TypeScript 7 and new PostgreSQL majors until they can be adopted.
 
+### Fixed
+
+- The feature page could miss an agent's result and stop refreshing until it
+  was reloaded, when the agent finished while the page was loading. It now
+  reads the agent jobs before the artifacts, so a finished job always comes
+  with what it produced.
+
 ## [0.1.0] - 2026-11-10
 
 The first release. Zephyrus carries a feature from idea to deployment through
