@@ -17,7 +17,7 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.2" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.2" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.0" />
   </ItemGroup>
 
   <!-- Agent system prompts ship next to the API so it runs the same from
