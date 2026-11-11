@@ -29,6 +29,20 @@ under **Changed**.
 - A GitHub webhook delivery that is not valid JSON is answered with 400 instead
   of 500.
 - The web UI renders every page per request (needed for the CSP nonce).
+- **.NET 11** (from .NET 10): every project targets `net11.0`, and the Docker
+  images and CI use the .NET 11 SDK and runtime. ASP.NET Core and
+  Microsoft.Extensions packages 11.0.0. Building from source needs the .NET 11
+  SDK.
+- EF Core 10.0.15 (from 10.0.14). EF Core 11 waits for a stable Npgsql 11
+  provider; the current one, 10.0.3, requires EF Core 10. No database changes.
+- OpenTelemetry 1.21.0, Swashbuckle.AspNetCore 11.0.0, Microsoft.NET.Test.Sdk
+  18.12.0.
+- Next.js and eslint-config-next 16.4.6, Testing Library user-event 14.6.9.
+  TypeScript stays on 5.9: typescript-eslint, used by eslint-config-next, does
+  not support TypeScript 7 yet.
+- Ollama image 0.40.16; claude-code-action v1.0.271.
+- Dependabot sends one grouped PR per ecosystem each week, and skips EF Core
+  11, TypeScript 7 and new PostgreSQL majors until they can be adopted.
 
 ## [0.1.0] - 2026-11-10
 

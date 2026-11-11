@@ -17,7 +17,7 @@ opening a public issue.
 
 ## Development setup
 
-Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0),
+Prerequisites: [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0),
 [Node.js 26](https://nodejs.org/) and
 [PostgreSQL 18](https://www.postgresql.org/) (or Docker).
 
