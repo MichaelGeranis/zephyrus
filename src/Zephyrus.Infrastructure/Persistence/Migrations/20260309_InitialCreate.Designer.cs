@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Zephyrus.Infrastructure.Persistence;
 
-#nullable enable
+#nullable disable
 
 namespace Zephyrus.Infrastructure.Persistence.Migrations;
 
