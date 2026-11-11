@@ -9,8 +9,11 @@ test("Generate PRD queues the PRD Agent, which writes the PRD in the background"
   await page.getByRole("button", { name: "Generate PRD" }).click();
 
   // The request returns once the job is queued; the page follows the job.
-  await expect(page.getByRole("heading", { name: "Agent Jobs" })).toBeVisible();
-  await expect(page.getByText("Prd Agent")).toBeVisible();
+  // Look inside the job list only: once the agent has run, the Agent
+  // Invocations list below names it too.
+  const jobs = page.getByRole("region", { name: "Agent Jobs" });
+  await expect(jobs).toBeVisible();
+  await expect(jobs.getByText("Prd Agent")).toBeVisible();
   await expect(page.getByRole("link", { name: "Review & Approve" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("PrdPending").first()).toBeVisible();
 });
