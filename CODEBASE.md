@@ -149,7 +149,7 @@ src/
 │   └── Middleware/
 │       └── ExceptionHandlingMiddleware.cs  — Global error handler
 │
-└── Zephyrus.Web/                           — Next.js 15 + TypeScript + Tailwind CSS 4
+└── Zephyrus.Web/                           — Next.js 16 + TypeScript + Tailwind CSS 4
     ├── app/
     │   ├── layout.tsx                      — Root layout
     │   ├── page.tsx                        — Landing page

@@ -69,7 +69,7 @@ Business rules are in [BUSINESS.md](BUSINESS.md); the technical design is in
 
 | Layer | Technology |
 |-------|-----------|
-| Backend / orchestrator | ASP.NET Core 10 (C#), Clean Architecture |
+| Backend / orchestrator | ASP.NET Core 11 (C#), Clean Architecture |
 | Frontend | Next.js 16 (TypeScript), Tailwind CSS 4 |
 | Database | PostgreSQL 18, Entity Framework Core 10 |
 | AI | Local models (Ollama, LM Studio, vLLM) and the Claude API, with fallback |
@@ -273,7 +273,7 @@ Grafana Tempo, Honeycomb or Datadog: point the variable at it.
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0)
 - [Node.js 26](https://nodejs.org/)
 - [PostgreSQL 18](https://www.postgresql.org/) (or Docker)
 

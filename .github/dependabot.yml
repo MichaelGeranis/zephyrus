@@ -1,5 +1,9 @@
-# Weekly update PRs for every package ecosystem in the repository.
-# Dependabot commits are exempt from the DCO sign-off check (see dco.yml).
+# Weekly update PRs, one per package ecosystem: every update for an ecosystem
+# arrives grouped in a single PR. Dependabot commits are exempt from the DCO
+# sign-off check (see dco.yml).
+#
+# A grouped PR fails as a whole if one update in it is incompatible, so known
+# blockers are ignored below. Each says when to remove it.
 version: 2
 updates:
   - package-ecosystem: nuget
@@ -7,34 +11,55 @@ updates:
     schedule:
       interval: weekly
     groups:
-      # Packages released together are updated together.
-      microsoft:
-        patterns: ["Microsoft.*", "System.*"]
-      opentelemetry:
-        patterns: ["OpenTelemetry*"]
-    open-pull-requests-limit: 5
+      nuget:
+        patterns: ["*"]
+    ignore:
+      # The stable Npgsql provider (Npgsql.EntityFrameworkCore.PostgreSQL 10.x)
+      # requires EF Core [10.0.4, 11.0.0). Remove once Npgsql 11 is stable,
+      # and update EF Core and Npgsql together.
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /src/Zephyrus.Web
     schedule:
       interval: weekly
     groups:
-      next:
-        patterns: ["next", "eslint-config-next", "react", "react-dom", "@types/react*"]
-    open-pull-requests-limit: 5
-
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
+      npm:
+        patterns: ["*"]
+    ignore:
+      # typescript-eslint (through eslint-config-next) supports TypeScript
+      # < 6.1 and fails on 7. Remove once it supports TypeScript 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directories: ["/docker"]
     schedule:
       interval: weekly
+    groups:
+      docker:
+        patterns: ["*"]
 
-  # Images used by docker-compose.yml (Postgres, Jaeger, Ollama).
+  # Images used by docker-compose.yml (Postgres, Jaeger, Ollama). The docker
+  # ecosystem does not read compose files, so they are a separate entry.
   - package-ecosystem: docker-compose
     directory: /
     schedule:
       interval: weekly
+    groups:
+      docker-compose:
+        patterns: ["*"]
+    ignore:
+      # A new PostgreSQL major cannot open an existing data volume without
+      # pg_upgrade, so major upgrades are done by hand, with upgrade notes.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

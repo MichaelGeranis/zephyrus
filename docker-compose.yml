@@ -115,7 +115,7 @@ services:
   # Local model server. Start it with: docker compose --profile ollama up
   # then pull the model once: docker compose exec ollama ollama pull llama3.1:8b
   ollama:
-    image: ollama/ollama:0.40.15
+    image: ollama/ollama:0.40.16
     profiles: ["ollama"]
     environment:
       # Agent prompts are long; Ollama's default context window cuts them off silently.
