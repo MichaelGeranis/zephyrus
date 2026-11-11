@@ -1,0 +1,131 @@
+# Zephyrus — everything on one machine.
+#
+#   docker compose up --build
+#
+# Opens the UI at http://localhost:3000. Demo mode is on by default: agents
+# return canned output and artifacts are written to a local folder, so no
+# Claude or GitHub credentials are needed. See README "Run with Docker" to
+# switch to real Claude and GitHub.
+#
+# Ports are bound to 127.0.0.1 only. The demo team tokens below are public;
+# never expose this setup to a network as-is.
+
+name: zephyrus
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: zephyrus
+      POSTGRES_USER: zephyrus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zephyrus}
+    # Postgres 18 keeps data under /var/lib/postgresql/<major>/docker, so the
+    # volume is mounted one level up. An 18 server cannot open data written
+    # by an older major version: reset with `docker compose down -v`.
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zephyrus -d zephyrus"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  api:
+    # Released image. To build from source instead, add
+    # -f docker-compose.yml -f docker-compose.build.yml (see the README).
+    image: ghcr.io/michaelgeranis/zephyrus-api:${ZEPHYRUS_VERSION:-latest}
+    depends_on:
+      db:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    environment:
+      ConnectionStrings__DefaultConnection: Host=db;Database=zephyrus;Username=zephyrus;Password=${POSTGRES_PASSWORD:-zephyrus}
+      Database__MigrateOnStartup: "true"
+      Demo__Enabled: ${ZEPHYRUS_DEMO:-true}
+      Cors__AllowedOrigins__0: http://localhost:3000
+      # Traces go to Jaeger (UI at http://localhost:16686); logs are JSON lines
+      # that carry the trace and span IDs, so a log line leads to its trace.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: zephyrus-api
+      Logging__Console__FormatterName: json
+      Logging__Console__FormatterOptions__IncludeScopes: "true"
+      # Models (ignored in demo mode). Each is provider:model; see README "Choosing models".
+      LanguageModel__Default__Primary: ${PRIMARY_MODEL:-local:llama3.1:8b}
+      LanguageModel__Default__Fallback: ${FALLBACK_MODEL:-claude:claude-opus-5-5}
+      LocalModel__BaseUrl: ${LOCAL_MODEL_URL:-http://ollama:11434/v1}
+      Claude__ApiKey: ${CLAUDE_API_KEY:-}
+      GitHub__Webhook__Secret: ${GITHUB_WEBHOOK_SECRET:-}
+      # Optional Zephyrus GitHub App; leave unset to use each project's token.
+      GitHub__App__AppId: ${GITHUB_APP_ID:-}
+      GitHub__App__PrivateKey: ${GITHUB_APP_PRIVATE_KEY:-}
+      # One member per role, so the approval gates can be tried, plus one
+      # member holding every role for a quick walkthrough.
+      Team__Members__0__Email: pm@zephyrus.local
+      Team__Members__0__DisplayName: Pat (PM/EM)
+      Team__Members__0__Token: ${PM_TOKEN:-demo-pm}
+      Team__Members__0__Roles__0: PmEm
+      Team__Members__1__Email: tech-lead@zephyrus.local
+      Team__Members__1__DisplayName: Taylor (Tech Lead)
+      Team__Members__1__Token: ${TECH_LEAD_TOKEN:-demo-tech-lead}
+      Team__Members__1__Roles__0: TechLead
+      Team__Members__2__Email: qa@zephyrus.local
+      Team__Members__2__DisplayName: Quinn (QA)
+      Team__Members__2__Token: ${QA_TOKEN:-demo-qa}
+      Team__Members__2__Roles__0: Qa
+      Team__Members__3__Email: everyone@zephyrus.local
+      Team__Members__3__DisplayName: Demo (all roles)
+      Team__Members__3__Token: ${ALL_ROLES_TOKEN:-demo-all}
+      Team__Members__3__Roles__0: PmEm
+      Team__Members__3__Roles__1: TechLead
+      Team__Members__3__Roles__2: Qa
+    ports:
+      - "127.0.0.1:5000:8080"
+    volumes:
+      - api-data:/data
+    # Ready means the API answers and can reach the database. The image has
+    # no curl, so bash speaks HTTP over /dev/tcp.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  web:
+    image: ghcr.io/michaelgeranis/zephyrus-web:${ZEPHYRUS_VERSION:-latest}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  # Trace viewer: http://localhost:16686
+  jaeger:
+    image: jaegertracing/jaeger:2.23.0
+    ports:
+      - "127.0.0.1:16686:16686"
+
+  # Local model server. Start it with: docker compose --profile ollama up
+  # then pull the model once: docker compose exec ollama ollama pull llama3.1:8b
+  ollama:
+    image: ollama/ollama:0.40.15
+    profiles: ["ollama"]
+    environment:
+      # Agent prompts are long; Ollama's default context window cuts them off silently.
+      OLLAMA_CONTEXT_LENGTH: "16384"
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+
+volumes:
+  db-data:
+  api-data:
+  ollama-models:

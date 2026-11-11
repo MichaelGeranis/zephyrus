@@ -1,0 +1,15 @@
+**/bin
+**/obj
+**/node_modules
+**/.next
+**/test-results
+**/playwright-report
+**/*.user
+.git
+.github
+.vs
+.vscode
+tests
+docs
+*.md
+!prompts/*.md

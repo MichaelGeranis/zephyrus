@@ -1,0 +1,232 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Zephyrus.Application.Exceptions;
+using Zephyrus.Application.Orchestration;
+using Zephyrus.Application.UseCases;
+using Zephyrus.Core.Entities;
+using Zephyrus.Core.Enums;
+using Zephyrus.Core.Exceptions;
+using Zephyrus.UnitTests.Jobs;
+
+namespace Zephyrus.UnitTests.UseCases;
+
+public class ApproveArtifactUseCaseTests
+{
+    private readonly InMemoryFeatureRepository _featureRepo = new();
+    private readonly InMemoryArtifactRepository _artifactRepo = new();
+    private readonly InMemoryPipelineEventRepository _eventRepo = new();
+    private readonly FakeUserContext _userContext = new();
+    private readonly ApproveArtifactUseCase _sut;
+
+    public ApproveArtifactUseCaseTests()
+    {
+        // The orchestrator only queues follow-up agent work, so a recording queue
+        // is enough here — agents are exercised by the integration tests.
+        var orchestrator = new PipelineOrchestrator(
+            new RecordingJobQueue(), NullLogger<PipelineOrchestrator>.Instance);
+
+        _sut = new ApproveArtifactUseCase(_featureRepo, _artifactRepo, _eventRepo, orchestrator, _userContext);
+    }
+
+    private static Feature CreateFeatureAt(Guid projectId, FeatureStatus targetStatus)
+    {
+        var feature = Feature.Create(projectId, "prompt");
+        while (feature.Status != targetStatus)
+            feature.Advance();
+        return feature;
+    }
+
+    // ── Error cases ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ExecuteAsync_WhenFeatureNotFound_ThrowsResourceNotFoundException()
+    {
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() =>
+            _sut.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenArtifactNotFound_ThrowsArtifactNotFoundException()
+    {
+        var feature = Feature.Create(Guid.NewGuid(), "prompt");
+        await _featureRepo.AddAsync(feature, Ct);
+
+        await Assert.ThrowsAsync<ArtifactNotFoundException>(() =>
+            _sut.ExecuteAsync(feature.Id, Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenArtifactBelongsToDifferentFeature_ThrowsRequestRejectedException()
+    {
+        var feature = Feature.Create(Guid.NewGuid(), "prompt");
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(Guid.NewGuid(), ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        await Assert.ThrowsAsync<RequestRejectedException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id, Ct));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenAlreadyApproved_ThrowsRequestRejectedException()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        artifact.Approve("first-approver");
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        await Assert.ThrowsAsync<RequestRejectedException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id, Ct));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenFeatureNotInRequiredStatus_ThrowsRequestRejectedException()
+    {
+        // Feature is in Ideation — cannot approve a PRD artifact (requires PrdPending)
+        var feature = Feature.Create(Guid.NewGuid(), "prompt");
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        await Assert.ThrowsAsync<RequestRejectedException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id, Ct));
+    }
+
+    // ── Happy path ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ExecuteAsync_WhenWorkflowApproved_MarksArtifactApproved()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.QaApproved);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Workflow);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id, Ct);
+
+        Assert.Equal("tl@test.com", result.ApprovedBy);
+        Assert.NotNull(result.ApprovedAt);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenWorkflowApproved_ShouldNotAdvanceToDeployed()
+    {
+        // Approving the generated workflow reviews the CI/CD config. Nothing has
+        // shipped, so the feature must stay at QaApproved until a deployment
+        // actually succeeds.
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.QaApproved);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Workflow);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        await _sut.ExecuteAsync(feature.Id, artifact.Id, Ct);
+
+        Assert.Equal(FeatureStatus.QaApproved, feature.Status);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenWorkflowApproved_ShouldNotRecordAPipelineEvent()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.QaApproved);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Workflow);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        await _sut.ExecuteAsync(feature.Id, artifact.Id, Ct);
+
+        Assert.Empty(_eventRepo.All);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenFeatureIsPastRequiredStatus_OnlyMarksApproved_DoesNotAdvance()
+    {
+        // Simulate a force-rerun scenario: artifact type is PRD but feature is already at Coding
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.Coding);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id, Ct);
+
+        // Artifact marked approved
+        Assert.NotNull(result.ApprovedBy);
+        // Feature status unchanged — not re-advanced
+        Assert.Equal(FeatureStatus.Coding, feature.Status);
+        // No pipeline event recorded
+        Assert.Empty(_eventRepo.All);
+    }
+    [Fact]
+    public async Task ExecuteAsync_WhenCallerIsNotAuthenticated_ThrowsUnauthorizedApprovalException()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        _userContext.IsAuthenticated = false;
+        _userContext.UserId = null;
+
+        await Assert.ThrowsAsync<UnauthorizedApprovalException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id, Ct));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenCallerLacksTheRequiredRole_ThrowsUnauthorizedApprovalException()
+    {
+        // A PRD requires PM/EM; this caller only holds QA.
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        _userContext.Roles = new[] { TeamRole.Qa };
+
+        await Assert.ThrowsAsync<UnauthorizedApprovalException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id, Ct));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenCallerLacksTheRequiredRole_ShouldNotApproveTheArtifact()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        _userContext.Roles = new[] { TeamRole.Qa };
+
+        await Assert.ThrowsAsync<UnauthorizedApprovalException>(() =>
+            _sut.ExecuteAsync(feature.Id, artifact.Id, Ct));
+
+        Assert.Null(artifact.ApprovedBy);
+        Assert.Null(artifact.ApprovedAt);
+        Assert.Equal(FeatureStatus.PrdPending, feature.Status);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenApproved_ShouldRecordTheAuthenticatedCallerAsApprover()
+    {
+        var feature = CreateFeatureAt(Guid.NewGuid(), FeatureStatus.PrdPending);
+        await _featureRepo.AddAsync(feature, Ct);
+
+        var artifact = Artifact.Create(feature.Id, ArtifactType.Prd);
+        await _artifactRepo.AddAsync(artifact, Ct);
+
+        _userContext.UserId = "someone@zephyrus.dev";
+
+        var result = await _sut.ExecuteAsync(feature.Id, artifact.Id, Ct);
+
+        Assert.Equal("someone@zephyrus.dev", result.ApprovedBy);
+    }
+
+}

@@ -1,0 +1,40 @@
+# Weekly update PRs for every package ecosystem in the repository.
+# Dependabot commits are exempt from the DCO sign-off check (see dco.yml).
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # Packages released together are updated together.
+      microsoft:
+        patterns: ["Microsoft.*", "System.*"]
+      opentelemetry:
+        patterns: ["OpenTelemetry*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /src/Zephyrus.Web
+    schedule:
+      interval: weekly
+    groups:
+      next:
+        patterns: ["next", "eslint-config-next", "react", "react-dom", "@types/react*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directories: ["/docker"]
+    schedule:
+      interval: weekly
+
+  # Images used by docker-compose.yml (Postgres, Jaeger, Ollama).
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly

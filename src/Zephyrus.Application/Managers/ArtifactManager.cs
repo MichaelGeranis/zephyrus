@@ -1,0 +1,76 @@
+using Zephyrus.Application.Exceptions;
+using Zephyrus.Core.Entities;
+using Zephyrus.Core.Interfaces;
+
+namespace Zephyrus.Application.Managers;
+
+public sealed class ArtifactManager
+{
+    private readonly IArtifactRepository _artifactRepository;
+    private readonly IFeatureRepository _featureRepository;
+    private readonly IProjectRepository _projectRepository;
+    private readonly ICodeHostFactory _codeHostFactory;
+
+    public ArtifactManager(
+        IArtifactRepository artifactRepository,
+        IFeatureRepository featureRepository,
+        IProjectRepository projectRepository,
+        ICodeHostFactory codeHostFactory)
+    {
+        _artifactRepository = artifactRepository;
+        _featureRepository = featureRepository;
+        _projectRepository = projectRepository;
+        _codeHostFactory = codeHostFactory;
+    }
+
+    public async Task<IReadOnlyList<Artifact>> GetByFeatureIdAsync(Guid featureId, CancellationToken ct = default)
+    {
+        var feature = await _featureRepository.GetByIdAsync(featureId, ct);
+        if (feature is null)
+            return null!;
+
+        return await _artifactRepository.GetByFeatureIdAsync(featureId, ct);
+    }
+
+    public async Task<Artifact?> GetByIdAsync(Guid artifactId, CancellationToken ct = default)
+    {
+        return await _artifactRepository.GetByIdAsync(artifactId, ct);
+    }
+
+    public async Task<string?> GetContentAsync(Guid featureId, Guid artifactId, CancellationToken ct = default)
+    {
+        var feature = await _featureRepository.GetByIdAsync(featureId, ct);
+        if (feature is null)
+            return null;
+
+        var artifact = await _artifactRepository.GetByIdAsync(artifactId, ct);
+        if (artifact is null || artifact.FeatureId != featureId)
+            return null;
+
+        var project = await _projectRepository.GetByIdAsync(feature.ProjectId, ct);
+        if (project is null)
+            return null;
+
+        var codeHost = _codeHostFactory.Create(project.GitHubToken);
+        return await codeHost.GetFileContentAsync(
+            project.RepositorySlug, "main", artifact.RepositoryPath, ct);
+    }
+
+    public async Task<DeletionPreview> GetDeletionPreviewAsync(Guid featureId, Guid artifactId, CancellationToken ct = default)
+    {
+        var artifact = await _artifactRepository.GetByIdAsync(artifactId, ct);
+        if (artifact is null || artifact.FeatureId != featureId)
+            throw new ResourceNotFoundException($"Artifact '{artifactId}' not found.");
+
+        return new DeletionPreview(artifact.Type.ToString(), 0, Array.Empty<string>());
+    }
+
+    public async Task DeleteAsync(Guid featureId, Guid artifactId, CancellationToken ct = default)
+    {
+        var artifact = await _artifactRepository.GetByIdAsync(artifactId, ct);
+        if (artifact is null || artifact.FeatureId != featureId)
+            throw new ResourceNotFoundException($"Artifact '{artifactId}' not found.");
+
+        await _artifactRepository.DeleteAsync(artifact, ct);
+    }
+}

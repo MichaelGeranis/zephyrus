@@ -1,0 +1,7 @@
+<Project>
+  <!-- The release version of every .NET project. A release tag must match it
+       (see .github/workflows/release.yml), as must src/Zephyrus.Web/package.json. -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

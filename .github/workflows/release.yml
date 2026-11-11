@@ -1,0 +1,86 @@
+name: Release
+
+# Pushing a tag like v0.1.0 publishes that version: the API and web images to
+# GitHub Container Registry, and a GitHub release with the CHANGELOG section.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish images and release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the GitHub release
+      packages: write   # push to ghcr.io
+    env:
+      REGISTRY: ghcr.io/michaelgeranis
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The tag, the .NET version, the web package version and the CHANGELOG
+      # must all agree, so a release is never published half-versioned.
+      - name: Check versions
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          dotnet_version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
+          web_version=$(node -p "require('./src/Zephyrus.Web/package.json').version")
+          [ "$dotnet_version" = "$version" ] || { echo "::error::Directory.Build.props is $dotnet_version, tag is $version"; exit 1; }
+          [ "$web_version" = "$version" ] || { echo "::error::package.json is $web_version, tag is $version"; exit 1; }
+          grep -q "^## \[$version\]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no [$version] section"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build images
+        run: |
+          created=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          for image in api web; do
+            docker build \
+              -f "docker/$image.Dockerfile" \
+              --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+              --label "org.opencontainers.image.version=${{ steps.version.outputs.version }}" \
+              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --label "org.opencontainers.image.created=$created" \
+              --label "org.opencontainers.image.licenses=Apache-2.0" \
+              -t "$REGISTRY/zephyrus-$image:${{ steps.version.outputs.version }}" \
+              -t "$REGISTRY/zephyrus-$image:latest" \
+              .
+          done
+
+      - name: Push images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for image in api web; do
+            docker push "$REGISTRY/zephyrus-$image:${{ steps.version.outputs.version }}"
+            docker push "$REGISTRY/zephyrus-$image:latest"
+          done
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          # The CHANGELOG section for this version, without its heading.
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          cat >> notes.md <<EOF
+
+          ## Run it
+
+          \`\`\`bash
+          git clone --branch v$version https://github.com/${GITHUB_REPOSITORY}.git
+          cd zephyrus
+          docker compose up
+          \`\`\`
+
+          Images: \`$REGISTRY/zephyrus-api:$version\` and \`$REGISTRY/zephyrus-web:$version\`.
+          EOF
+          gh release create "$GITHUB_REF_NAME" --title "Zephyrus $version" --notes-file notes.md --verify-tag

@@ -1,0 +1,38 @@
+.claude/*
+
+# .NET build outputs
+**/bin/
+**/obj/
+
+# User-specific files
+*.user
+*.suo
+*.userprefs
+
+# NuGet
+**/packages/
+
+# IDE
+.vs/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.local
+appsettings.*.local.json
+.docs/*
+
+# Demo mode code host output when running the API locally
+demo-repos/
+
+# Playwright output
+test-results/
+playwright-report/
+
+# Test coverage reports
+TestResults/

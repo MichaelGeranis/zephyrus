@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# CI only reads the repository. Without this, GITHUB_TOKEN gets the repo's
+# default (often read/write) permissions in every job.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Build and test (.NET)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Zephyrus.sln
+
+      # Fail on any NuGet package with a known high or critical advisory,
+      # including transitive ones.
+      - name: Check for vulnerable packages
+        run: |
+          dotnet list Zephyrus.sln package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+          if grep -qE '\s(High|Critical)\s' vulnerable.txt; then
+            echo "::error::A NuGet package has a known high or critical vulnerability (see above)."
+            exit 1
+          fi
+
+      - name: Build
+        run: dotnet build Zephyrus.sln --no-restore --configuration Release
+
+      # Run each test project as its own step so both report separately — a
+      # single solution-wide run makes it hard to tell whether a project was
+      # actually executed. Each writes a coverage report for the gate below.
+      - name: Test (unit)
+        run: >
+          dotnet test tests/Zephyrus.UnitTests/Zephyrus.UnitTests.csproj --no-build --configuration Release
+          --coverage --coverage-settings "$GITHUB_WORKSPACE/coverage.settings.xml"
+          --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/coverage/unit.cobertura.xml"
+
+      - name: Test (integration)
+        run: >
+          dotnet test tests/Zephyrus.IntegrationTests/Zephyrus.IntegrationTests.csproj --no-build --configuration Release
+          --coverage --coverage-settings "$GITHUB_WORKSPACE/coverage.settings.xml"
+          --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/coverage/integration.cobertura.xml"
+
+      # Line coverage of both suites together, without migrations and
+      # generated code (see coverage.settings.xml).
+      - name: Coverage gate (80% of lines)
+        run: python3 scripts/coverage-gate.py 80 TestResults/coverage/*.cobertura.xml
+
+  frontend:
+    name: Typecheck and build (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/Zephyrus.Web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: src/Zephyrus.Web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # Fails on high or critical advisories. The remaining moderate ones are
+      # in build-time tooling (the ESLint chain and the Tailwind typography
+      # plugin's CSS parser), where npm's only fix is a downgrade.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Fails below 80% of components, lib and the proxy (vitest.config.mts).
+      # Pages are covered by the end-to-end tests in the Docker job.
+      - name: Component tests and coverage gate
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Docker demo (smoke and end-to-end tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # --wait returns once every service's health check passes, and fails
+      # if one does not: the API can reach the database, the web UI answers.
+      - name: Build images and start the stack
+        run: docker compose -f docker-compose.yml -f docker-compose.build.yml up --build --wait --wait-timeout 180
+
+      - name: Health endpoints answer without a token
+        run: |
+          curl -fsS http://localhost:5000/health/ready | tee /dev/stderr | grep -q '"database":"Healthy"'
+          curl -fsS http://localhost:3000/health | grep -q Healthy
+
+      # Demo mode seeds a sample project on first start, so seeing it proves
+      # the database was migrated, the API started and authentication works.
+      - name: API serves the demo project
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS -H 'Authorization: Bearer demo-all' http://localhost:5000/api/projects | grep -q 'Acme Billing'; then
+              echo "API ready after $attempt attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not serve the demo project in time"
+          exit 1
+
+      - name: API rejects anonymous calls
+        run: test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/api/projects)" = "401"
+
+      - name: Web UI responds with a Content-Security-Policy
+        run: |
+          curl -fsS -D - -o /dev/null http://localhost:3000/projects | grep -i "^content-security-policy: .*'nonce-"
+
+      # Browser tests against the demo stack: sign-in, the approval gate's
+      # role check, the audit trail and every page loading cleanly.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: src/Zephyrus.Web/package-lock.json
+
+      - name: Install end-to-end test tools
+        working-directory: src/Zephyrus.Web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        working-directory: src/Zephyrus.Web
+        run: npm run test:e2e
+
+      - name: Show logs
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes

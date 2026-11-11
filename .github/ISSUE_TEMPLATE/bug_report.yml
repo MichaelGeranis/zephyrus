@@ -1,0 +1,50 @@
+name: Bug report
+description: Something in Zephyrus is not working as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Security problems must not be reported here** —
+        see SECURITY.md for the private reporting link.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a project with ...
+        2. Approve the PRD ...
+        3. See error ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - API / pipeline
+        - An agent (PRD, Architect, Task, Code, QA, DevOps)
+        - Web UI
+        - GitHub integration / webhooks
+        - Setup / documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: Output of `git rev-parse --short HEAD`, or a release tag.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove any tokens, API keys or private repository content first.
+      render: text

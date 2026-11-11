@@ -1,0 +1,29 @@
+name: Claude Code
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+jobs:
+  claude:
+    # On a public repository anyone can comment. Run only for the owner and
+    # collaborators, and only when Claude is mentioned, so nobody else can
+    # spend the API key or act with this workflow's write permissions.
+    if: >-
+      contains(github.event.comment.body, '@claude') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          # Responds to @claude mentions in comments

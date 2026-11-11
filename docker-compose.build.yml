@@ -1,0 +1,16 @@
+# Builds the API and web UI from this checkout instead of pulling the
+# released images:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        # The browser calls the API directly, so its address is built in.
+        NEXT_PUBLIC_API_URL: http://localhost:5000

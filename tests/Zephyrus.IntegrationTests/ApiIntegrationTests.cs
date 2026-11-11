@@ -1,0 +1,1357 @@
+using System.Net;
+using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Xunit;
+using Zephyrus.Core.Interfaces;
+using Zephyrus.Infrastructure.Persistence;
+
+namespace Zephyrus.IntegrationTests;
+
+public class ApiIntegrationTests : IClassFixture<ZephyrusApiFactory>
+{
+    private readonly HttpClient _client;
+    private readonly ZephyrusApiFactory _factory;
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    public ApiIntegrationTests(ZephyrusApiFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateClient();
+    }
+
+    // ──────────────────────────────────────────────
+    // Projects API
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Projects_CreateAndRetrieve()
+    {
+        // POST /api/projects
+        var createResponse = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            name = "Alpha",
+            description = "First project",
+            config = "project:\n  name: alpha",
+            repositorySlug = "org/alpha",
+            gitHubToken = "fake-token"
+        }, cancellationToken: Ct);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var created = await Deserialize<ProjectDto>(createResponse);
+        Assert.Equal("Alpha", created.Name);
+        Assert.Equal("org/alpha", created.RepositorySlug);
+
+        // GET /api/projects/{id}
+        var getResponse = await _client.GetAsync($"/api/projects/{created.Id}", Ct);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var fetched = await Deserialize<ProjectDto>(getResponse);
+        Assert.Equal(created.Id, fetched.Id);
+        Assert.Equal("Alpha", fetched.Name);
+    }
+
+    [Fact]
+    public async Task Projects_GetAll_ReturnsArray()
+    {
+        // Seed a project
+        await _client.PostAsJsonAsync("/api/projects", new
+        {
+            name = "ListTest",
+            description = "For listing",
+            config = "config: test",
+            repositorySlug = "org/list-test",
+            gitHubToken = "fake-token"
+        }, cancellationToken: Ct);
+
+        // GET /api/projects
+        var response = await _client.GetAsync("/api/projects", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var projects = await Deserialize<ProjectDto[]>(response);
+        Assert.Contains(projects, p => p.Name == "ListTest");
+    }
+
+    [Fact]
+    public async Task Projects_GetById_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/projects/{Guid.NewGuid()}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Features API
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Features_CreateAndRetrieve()
+    {
+        var project = await CreateProject("FeatureTest", "org/feature-test");
+
+        // POST /api/features
+        var createResponse = await _client.PostAsJsonAsync("/api/features", new
+        {
+            projectId = project.Id,
+            prompt = "Add login page"
+        }, cancellationToken: Ct);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var created = await Deserialize<FeatureDto>(createResponse);
+        Assert.Equal("Add login page", created.Prompt);
+        Assert.Equal("Ideation", created.Status);
+
+        // GET /api/features/{id}
+        var getResponse = await _client.GetAsync($"/api/features/{created.Id}", Ct);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var fetched = await Deserialize<FeatureDto>(getResponse);
+        Assert.Equal(created.Id, fetched.Id);
+    }
+
+    [Fact]
+    public async Task Features_GetById_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Features_GetByProject_ReturnsFilteredList()
+    {
+        var project = await CreateProject("ByProjectTest", "org/by-project-test");
+
+        await _client.PostAsJsonAsync("/api/features", new { projectId = project.Id, prompt = "Feature A" }, cancellationToken: Ct);
+        await _client.PostAsJsonAsync("/api/features", new { projectId = project.Id, prompt = "Feature B" }, cancellationToken: Ct);
+
+        // GET /api/features/by-project/{projectId}
+        var response = await _client.GetAsync($"/api/features/by-project/{project.Id}", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var features = await Deserialize<FeatureDto[]>(response);
+        Assert.Equal(2, features.Length);
+        Assert.Contains(features, f => f.Prompt == "Feature A");
+        Assert.Contains(features, f => f.Prompt == "Feature B");
+    }
+
+    // ──────────────────────────────────────────────
+    // PRD Generation
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GeneratePrd_WhenFeatureIsAnIdea_ShouldQueueThePrdAgentAndAccept()
+    {
+        var project = await CreateProject("PrdGenTest", "org/prd-gen-test");
+        var feature = await CreateFeature(project.Id, "Build dashboard");
+
+        // POST /api/features/{id}/generate-prd queues the job and returns at once.
+        var response = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null, Ct);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(feature.Id, (await Deserialize<FeatureDto>(response)).Id);
+
+        // The test server runs jobs inline, so the PRD is already there.
+        var artifact = await GetArtifactByType(feature.Id, "Prd");
+        Assert.Equal("Prd", artifact.Type);
+        Assert.StartsWith("docs/prd/", artifact.RepositoryPath);
+        Assert.Null(artifact.ApprovedBy);
+
+        // Feature should now be PrdPending
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}", Ct);
+        var updated = await Deserialize<FeatureDto>(featureResponse);
+        Assert.Equal("PrdPending", updated.Status);
+    }
+
+    [Fact]
+    public async Task GeneratePrd_WrongStatus_Throws()
+    {
+        var project = await CreateProject("PrdWrongStatus", "org/prd-wrong-status");
+        var feature = await CreateFeature(project.Id, "Some feature");
+
+        // Generate PRD — moves to PrdPending
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        // Approve PRD — moves to PrdApproved, then orchestrator advances to ArchPending
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd!.Id}/approve", null, Ct);
+
+        // Generate PRD again — should fail (not in Ideation or PrdPending)
+        var response = await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Artifacts List
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Artifacts_List_EmptyInitially()
+    {
+        var project = await CreateProject("ArtifactListEmpty", "org/artifact-list-empty");
+        var feature = await CreateFeature(project.Id, "Artifact list test");
+
+        // GET /api/features/{id}/artifacts
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/artifacts", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var artifacts = await Deserialize<ArtifactDto[]>(response);
+        Assert.Empty(artifacts);
+    }
+
+    [Fact]
+    public async Task Artifacts_List_AfterPrdGeneration()
+    {
+        var project = await CreateProject("ArtifactListPrd", "org/artifact-list-prd");
+        var feature = await CreateFeature(project.Id, "Artifact after PRD");
+
+        await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null, Ct);
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/artifacts", Ct);
+        var artifacts = await Deserialize<ArtifactDto[]>(response);
+
+        Assert.Single(artifacts);
+        Assert.Equal("Prd", artifacts[0].Type);
+    }
+
+    [Fact]
+    public async Task Artifacts_List_FeatureNotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/artifacts", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Artifact Content
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task ArtifactContent_ReturnsPrdMarkdown()
+    {
+        var project = await CreateProject("ContentTest", "org/content-test");
+        var feature = await CreateFeature(project.Id, "Content retrieval");
+
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        // GET /api/features/{id}/artifacts/{artifactId}/content
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/content", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await Deserialize<ContentDto>(response);
+        Assert.Contains("PRD", body.Content);
+    }
+
+    [Fact]
+    public async Task ArtifactContent_WrongFeatureId_Returns404()
+    {
+        var project = await CreateProject("ContentWrong", "org/content-wrong");
+        var feature = await CreateFeature(project.Id, "Wrong feature content");
+
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        // Use a different feature ID
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/artifacts/{prd.Id}/content", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ArtifactContent_NonexistentArtifact_Returns404()
+    {
+        var project = await CreateProject("ContentNoArtifact", "org/content-no-artifact");
+        var feature = await CreateFeature(project.Id, "No artifact");
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/artifacts/{Guid.NewGuid()}/content", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Approval Gate
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Approve_PrdArtifact_AdvancesToPrdApproved()
+    {
+        var project = await CreateProject("ApproveTest", "org/approve-test");
+        var feature = await CreateFeature(project.Id, "Approval test");
+
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        // POST /api/features/{id}/artifacts/{artifactId}/approve
+        var approveResponse = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+        Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
+
+        var approved = await Deserialize<ArtifactDto>(approveResponse);
+        Assert.Equal("pm@test.com", approved.ApprovedBy);
+        Assert.NotNull(approved.ApprovedAt);
+    }
+
+    [Fact]
+    public async Task Approve_TriggersArchitectAgent_FeatureEndsAtArchPending()
+    {
+        var project = await CreateProject("OrchestratorTest", "org/orchestrator-test");
+        var feature = await CreateFeature(project.Id, "Orchestrator chain");
+
+        // Generate PRD
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        // Approve PRD — triggers orchestrator → Architect Agent
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        // Feature should be at ArchPending (orchestrator advanced it)
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}", Ct);
+        var updated = await Deserialize<FeatureDto>(featureResponse);
+        Assert.Equal("ArchPending", updated.Status);
+
+        // ADR artifact should exist
+        var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts", Ct);
+        var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
+        Assert.Equal(2, artifacts.Length);
+        Assert.Contains(artifacts, a => a.Type == "Prd");
+        Assert.Contains(artifacts, a => a.Type == "Adr");
+    }
+
+    [Fact]
+    public async Task Approve_AdrArtifact_AdvancesToArchApproved()
+    {
+        var project = await CreateProject("AdrApproveTest", "org/adr-approve-test");
+        var feature = await CreateFeature(project.Id, "ADR approval flow");
+
+        // Generate PRD → Approve PRD → Architect Agent runs → ADR created
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        // Find the ADR artifact
+        var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts", Ct);
+        var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
+        var adr = artifacts.Single(a => a.Type == "Adr");
+
+        // Approve ADR
+        var approveResponse = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{adr.Id}/approve", null, Ct);
+        Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
+
+        // Feature should be at TasksPending (orchestrator triggers Task Agent after ADR approval)
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}", Ct);
+        var updated = await Deserialize<FeatureDto>(featureResponse);
+        Assert.Equal("TasksPending", updated.Status);
+    }
+
+    [Fact]
+    public async Task Approve_AlreadyApproved_Throws()
+    {
+        var project = await CreateProject("DoubleApprove", "org/double-approve");
+        var feature = await CreateFeature(project.Id, "Double approve api");
+
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        // First approve — OK
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        // Second approve — should fail
+        var secondApprove = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, secondApprove.StatusCode);
+    }
+
+    [Fact]
+    public async Task Approve_WrongFeatureStatus_Throws()
+    {
+        var project = await CreateProject("WrongStatusApi", "org/wrong-status-api");
+        var feature = await CreateFeature(project.Id, "Wrong status via API");
+
+        // Generate PRD → Approve PRD → now at ArchPending
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        // Try to approve the PRD again — feature is no longer in PrdPending
+        var wrongStatusApprove = await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, wrongStatusApprove.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Pipeline Events
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task PipelineEvents_ReturnsTransitionHistory()
+    {
+        var project = await CreateProject("EventsTest", "org/events-test");
+        var feature = await CreateFeature(project.Id, "Pipeline events test");
+
+        // Generate PRD → Ideation → PrdPending
+        await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null, Ct);
+
+        // GET /api/features/{id}/pipeline-events
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var events = await Deserialize<PipelineEventDto[]>(response);
+        Assert.Single(events);
+        Assert.Equal("Ideation", events[0].FromStatus);
+        Assert.Equal("PrdPending", events[0].ToStatus);
+    }
+
+    [Fact]
+    public async Task PipelineEvents_FeatureNotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/pipeline-events", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Tasks API
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Tasks_EmptyInitially()
+    {
+        var project = await CreateProject("TasksEmpty", "org/tasks-empty");
+        var feature = await CreateFeature(project.Id, "Tasks empty test");
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var tasks = await Deserialize<TaskItemDto[]>(response);
+        Assert.Empty(tasks);
+    }
+
+    [Fact]
+    public async Task Tasks_FeatureNotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/tasks", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Tasks_AfterTaskAgentRuns_ReturnsTaskItems()
+    {
+        var project = await CreateProject("TasksAfterAgent", "org/tasks-after-agent");
+        var feature = await CreateFeature(project.Id, "Tasks after agent");
+
+        // PRD → Approve → Architect → Approve ADR → Task Agent runs
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id);
+
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id);
+
+        // Feature should now be at TasksPending with tasks created
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var tasks = await Deserialize<TaskItemDto[]>(response);
+        Assert.Equal(3, tasks.Length);
+        Assert.Contains(tasks, t => t.AgentType == "DB");
+        Assert.Contains(tasks, t => t.AgentType == "BE");
+        Assert.Contains(tasks, t => t.AgentType == "FE");
+        Assert.All(tasks, t =>
+        {
+            Assert.Equal("Pending", t.Status);
+            Assert.NotNull(t.ExternalIssueId);
+            Assert.NotEmpty(t.Title);
+        });
+    }
+
+    [Fact]
+    public async Task Tasks_AfterCodeAgentRuns_HavePrIds()
+    {
+        var project = await CreateProject("TasksWithPrs", "org/tasks-with-prs");
+        var feature = await CreateFeature(project.Id, "Tasks with PRs");
+
+        // Run through to Coding (Task Agent → approve → Code Agent)
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id);
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id);
+        var task = await GetArtifactByType(feature.Id, "Task");
+        await ApproveArtifact(feature.Id, task.Id);
+
+        // Feature is now in Coding — tasks should have PrIds
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}", Ct);
+        var updated = await Deserialize<FeatureDto>(featureResponse);
+        Assert.Equal("Coding", updated.Status);
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct);
+        var tasks = await Deserialize<TaskItemDto[]>(response);
+        Assert.Equal(3, tasks.Length);
+        Assert.All(tasks, t =>
+        {
+            Assert.Equal("PrOpen", t.Status);
+            Assert.NotNull(t.PrId);
+        });
+    }
+
+    // ──────────────────────────────────────────────
+    // Pipeline Events — Multi-Transition
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task PipelineEvents_AfterApprovalChain_ReturnsMultipleTransitions()
+    {
+        var project = await CreateProject("EventsChain", "org/events-chain");
+        var feature = await CreateFeature(project.Id, "Events chain test");
+
+        // PRD → Approve → Architect runs (3 transitions: Ideation→PrdPending, PrdPending→PrdApproved, PrdApproved→ArchPending)
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id);
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var events = await Deserialize<PipelineEventDto[]>(response);
+        Assert.Equal(3, events.Length);
+
+        // Verify chronological order and transition chain
+        Assert.Equal("Ideation", events[0].FromStatus);
+        Assert.Equal("PrdPending", events[0].ToStatus);
+        Assert.Equal("system", events[0].TriggeredBy);
+
+        Assert.Equal("PrdPending", events[1].FromStatus);
+        Assert.Equal("PrdApproved", events[1].ToStatus);
+        Assert.Equal("pm@test.com", events[1].TriggeredBy);
+
+        Assert.Equal("PrdApproved", events[2].FromStatus);
+        Assert.Equal("ArchPending", events[2].ToStatus);
+        Assert.Equal("system", events[2].TriggeredBy);
+    }
+
+    [Fact]
+    public async Task PipelineEvents_EmptyForNewFeature()
+    {
+        var project = await CreateProject("EventsEmpty", "org/events-empty");
+        var feature = await CreateFeature(project.Id, "Events empty test");
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var events = await Deserialize<PipelineEventDto[]>(response);
+        Assert.Empty(events);
+    }
+
+    // ──────────────────────────────────────────────
+    // Full Pipeline via HTTP API
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task FullPipelineViaApi_IdeationThroughDeployed()
+    {
+        var project = await CreateProject("FullApiPipeline", "org/full-api-pipeline");
+        var feature = await CreateFeature(project.Id, "Full pipeline via API");
+
+        // Step 1: Generate PRD → PrdPending
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await AssertFeatureStatus(feature.Id, "PrdPending");
+
+        // Step 2: Approve PRD → PrdApproved → Architect runs → ArchPending
+        await ApproveArtifact(feature.Id, prd.Id);
+        await AssertFeatureStatus(feature.Id, "ArchPending");
+
+        // Step 3: Approve ADR → ArchApproved → Task Agent runs → TasksPending
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id);
+        await AssertFeatureStatus(feature.Id, "TasksPending");
+
+        // Step 4: Approve Tasks → TasksApproved → Code Agents run → Coding
+        var task = await GetArtifactByType(feature.Id, "Task");
+        await ApproveArtifact(feature.Id, task.Id);
+        await AssertFeatureStatus(feature.Id, "Coding");
+
+        // Step 5: Approve PR → Coding → QaPending, QA Agent runs
+        var pr = await GetArtifactByType(feature.Id, "Pr");
+        await ApproveArtifact(feature.Id, pr.Id);
+        await AssertFeatureStatus(feature.Id, "QaPending");
+
+        // Step 6: Approve Test → QaApproved, DevOps Agent runs
+        var test = await GetArtifactByType(feature.Id, "Test");
+        await ApproveArtifact(feature.Id, test.Id);
+        await AssertFeatureStatus(feature.Id, "QaApproved");
+
+        // Step 7: Approve Workflow → reviews the CI/CD config; nothing has shipped
+        var workflow = await GetArtifactByType(feature.Id, "Workflow");
+        await ApproveArtifact(feature.Id, workflow.Id);
+        await AssertFeatureStatus(feature.Id, "QaApproved");
+
+        // Step 8: the PR merges and the deployment reports success → Deployed
+        var mergedTasks = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct));
+        const string mergeSha = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b";
+
+        await SendWebhook("pull_request", $$"""
+            {
+              "action": "closed",
+              "repository": { "full_name": "org/full-api-pipeline" },
+              "pull_request": {
+                "number": {{mergedTasks[0].PrId}},
+                "merged": true,
+                "merge_commit_sha": "{{mergeSha}}"
+              }
+            }
+            """);
+
+        await SendWebhook("deployment_status", $$"""
+            {
+              "repository": { "full_name": "org/full-api-pipeline" },
+              "deployment": { "sha": "{{mergeSha}}", "environment": "production" },
+              "deployment_status": { "state": "success" }
+            }
+            """);
+
+        await AssertFeatureStatus(feature.Id, "Deployed");
+
+        var deployments = await Deserialize<DeploymentDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/deployments", Ct));
+        Assert.Equal(mergeSha, Assert.Single(deployments).Sha);
+        Assert.Equal("Success", deployments[0].Status);
+
+        // Verify all artifacts exist
+        var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts", Ct);
+        var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
+        Assert.Equal(6, artifacts.Length);
+        Assert.Contains(artifacts, a => a.Type == "Prd");
+        Assert.Contains(artifacts, a => a.Type == "Adr");
+        Assert.Contains(artifacts, a => a.Type == "Task");
+        Assert.Contains(artifacts, a => a.Type == "Pr");
+        Assert.Contains(artifacts, a => a.Type == "Test");
+        Assert.Contains(artifacts, a => a.Type == "Workflow");
+        Assert.All(artifacts, a => Assert.NotNull(a.ApprovedBy));
+
+        // Verify 10 pipeline events (full pipeline)
+        var eventsResponse = await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events", Ct);
+        var events = await Deserialize<PipelineEventDto[]>(eventsResponse);
+        Assert.Equal(10, events.Length);
+        Assert.Equal("Ideation", events[0].FromStatus);
+        Assert.Equal("PrdPending", events[0].ToStatus);
+        Assert.Equal("QaApproved", events[9].FromStatus);
+        Assert.Equal("Deployed", events[9].ToStatus);
+
+        // Verify tasks have PRs
+        var tasksResponse = await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct);
+        var tasks = await Deserialize<TaskItemDto[]>(tasksResponse);
+        Assert.Equal(3, tasks.Length);
+        Assert.All(tasks, t => Assert.NotNull(t.PrId));
+    }
+
+    [Fact]
+    public async Task WorkflowArtifactContent_ReturnsYaml()
+    {
+        var project = await CreateProject("WorkflowContent", "org/workflow-content");
+        var feature = await CreateFeature(project.Id, "Workflow content test");
+
+        // Run through full pipeline to QaApproved (DevOps Agent creates workflow)
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+        await ApproveArtifact(feature.Id, prd.Id);
+        var adr = await GetArtifactByType(feature.Id, "Adr");
+        await ApproveArtifact(feature.Id, adr.Id);
+        var task = await GetArtifactByType(feature.Id, "Task");
+        await ApproveArtifact(feature.Id, task.Id);
+        var pr = await GetArtifactByType(feature.Id, "Pr");
+        await ApproveArtifact(feature.Id, pr.Id);
+        var test = await GetArtifactByType(feature.Id, "Test");
+        await ApproveArtifact(feature.Id, test.Id);
+
+        // Get workflow artifact content
+        var workflow = await GetArtifactByType(feature.Id, "Workflow");
+        var response = await _client.GetAsync(
+            $"/api/features/{feature.Id}/artifacts/{workflow.Id}/content", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await Deserialize<ContentDto>(response);
+        Assert.Contains("Deploy", body.Content);
+        Assert.Contains("dotnet", body.Content);
+    }
+
+    // ──────────────────────────────────────────────
+    // ADR Content
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task AdrContent_ReturnsArchitectureMarkdown()
+    {
+        var project = await CreateProject("AdrContentTest", "org/adr-content-test");
+        var feature = await CreateFeature(project.Id, "ADR content retrieval");
+
+        // Generate PRD → Approve → Architect Agent fires → ADR exists
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        await _client.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts", Ct);
+        var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
+        var adr = artifacts.Single(a => a.Type == "Adr");
+
+        // GET content
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/artifacts/{adr.Id}/content", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await Deserialize<ContentDto>(response);
+        Assert.Contains("ADR", body.Content);
+    }
+
+    // ──────────────────────────────────────────────
+    // Delete — Projects
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Projects_DeletionPreview_ReturnsEntityInfo()
+    {
+        var project = await CreateProject("DeletePreviewProject", "org/delete-preview");
+        await CreateFeature(project.Id, "Feature to be deleted");
+
+        var response = await _client.GetAsync($"/api/projects/{project.Id}/deletion-preview", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var preview = await Deserialize<DeletionPreviewDto>(response);
+        Assert.Equal("DeletePreviewProject", preview.EntityTitle);
+        Assert.Equal(1, preview.ChildrenCount);
+        Assert.NotEmpty(preview.Warnings);
+    }
+
+    [Fact]
+    public async Task Projects_DeletionPreview_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/projects/{Guid.NewGuid()}/deletion-preview", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Projects_Delete_RemovesProjectAndFeatures()
+    {
+        var project = await CreateProject("ToDeleteProject", "org/to-delete");
+        var feature = await CreateFeature(project.Id, "Feature inside deleted project");
+
+        var deleteResponse = await _client.DeleteAsync($"/api/projects/{project.Id}", Ct);
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        var deleted = await Deserialize<DeletedDto>(deleteResponse);
+        Assert.True(deleted.DeletedEntitiesCount >= 1);
+
+        // Project should be gone
+        var getResponse = await _client.GetAsync($"/api/projects/{project.Id}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+
+        // Feature should be gone
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, featureResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Projects_Delete_NotFound_Returns404()
+    {
+        var response = await _client.DeleteAsync($"/api/projects/{Guid.NewGuid()}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Delete — Features
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Features_DeletionPreview_ReturnsEntityInfo()
+    {
+        var project = await CreateProject("FeatureDeletePreviewProj", "org/feat-del-preview");
+        var feature = await CreateFeature(project.Id, "Feature to preview delete");
+        await _client.PostAsync($"/api/features/{feature.Id}/generate-prd", null, Ct);
+
+        var response = await _client.GetAsync($"/api/features/{feature.Id}/deletion-preview", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var preview = await Deserialize<DeletionPreviewDto>(response);
+        Assert.Equal("Feature to preview delete", preview.EntityTitle);
+        Assert.Equal(1, preview.ChildrenCount);
+    }
+
+    [Fact]
+    public async Task Features_DeletionPreview_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync($"/api/features/{Guid.NewGuid()}/deletion-preview", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Features_Delete_RemovesFeatureAndArtifacts()
+    {
+        var project = await CreateProject("FeatureDeleteProj", "org/feat-delete");
+        var feature = await CreateFeature(project.Id, "Feature to be deleted");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var deleteResponse = await _client.DeleteAsync($"/api/features/{feature.Id}", Ct);
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        var deleted = await Deserialize<DeletedDto>(deleteResponse);
+        Assert.True(deleted.DeletedEntitiesCount >= 1);
+
+        // Feature should be gone
+        var featureResponse = await _client.GetAsync($"/api/features/{feature.Id}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, featureResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Features_Delete_NotFound_Returns404()
+    {
+        var response = await _client.DeleteAsync($"/api/features/{Guid.NewGuid()}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Delete — Artifacts
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Artifacts_DeletionPreview_ReturnsEntityInfo()
+    {
+        var project = await CreateProject("ArtifactDeletePreviewProj", "org/art-del-preview");
+        var feature = await CreateFeature(project.Id, "Artifact delete preview");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var response = await _client.GetAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/deletion-preview", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var preview = await Deserialize<DeletionPreviewDto>(response);
+        Assert.Equal("Prd", preview.EntityTitle);
+        Assert.Equal(0, preview.ChildrenCount);
+    }
+
+    [Fact]
+    public async Task Artifacts_DeletionPreview_NotFound_Returns404()
+    {
+        var response = await _client.GetAsync(
+            $"/api/features/{Guid.NewGuid()}/artifacts/{Guid.NewGuid()}/deletion-preview", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Artifacts_Delete_RemovesArtifact()
+    {
+        var project = await CreateProject("ArtifactDeleteProj", "org/art-delete");
+        var feature = await CreateFeature(project.Id, "Artifact to delete");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var deleteResponse = await _client.DeleteAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}", Ct);
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        var deleted = await Deserialize<DeletedDto>(deleteResponse);
+        Assert.Equal(1, deleted.DeletedEntitiesCount);
+
+        // Artifact should be gone from the list
+        var artifactsResponse = await _client.GetAsync($"/api/features/{feature.Id}/artifacts", Ct);
+        var artifacts = await Deserialize<ArtifactDto[]>(artifactsResponse);
+        Assert.DoesNotContain(artifacts, a => a.Id == prd.Id);
+    }
+
+    [Fact]
+    public async Task Artifacts_Delete_NotFound_Returns404()
+    {
+        var project = await CreateProject("ArtifactDeleteNotFound", "org/art-del-notfound");
+        var feature = await CreateFeature(project.Id, "Artifact not found delete");
+
+        var response = await _client.DeleteAsync(
+            $"/api/features/{feature.Id}/artifacts/{Guid.NewGuid()}", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Helpers
+    // ──────────────────────────────────────────────
+
+    // ──────────────────────────────────────────────
+    // Approval authorisation
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Approve_WhenCallerIsAnonymous_Returns401()
+    {
+        var project = await CreateProject("AnonApprove", "org/anon-approve");
+        var feature = await CreateFeature(project.Id, "Anonymous approval");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var anonymous = _factory.CreateClientWithToken(null);
+        var response = await anonymous.PostAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Approve_WhenCallerLacksRequiredRole_Returns403()
+    {
+        // A PRD requires PM/EM; this caller only holds QA.
+        var project = await CreateProject("QaApprovesPrd", "org/qa-approves-prd");
+        var feature = await CreateFeature(project.Id, "QA approving a PRD");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var qaOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.QaOnlyToken);
+        var response = await qaOnly.PostAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Approve_WhenCallerHoldsRequiredRole_Succeeds()
+    {
+        var project = await CreateProject("PmApprovesPrd", "org/pm-approves-prd");
+        var feature = await CreateFeature(project.Id, "PM approving a PRD");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var pmOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.PmOnlyToken);
+        var response = await pmOnly.PostAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Approve_RecordsAuthenticatedIdentity_NotACallerSuppliedName()
+    {
+        // The whole point of the gate: a caller cannot approve as someone else.
+        var project = await CreateProject("ForgedApprover", "org/forged-approver");
+        var feature = await CreateFeature(project.Id, "Forged approver identity");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var pmOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.PmOnlyToken);
+        var response = await pmOnly.PostAsJsonAsync(
+            $"/api/features/{feature.Id}/artifacts/{prd.Id}/approve",
+            new { approvedBy = "someone-else@test.com" }, cancellationToken: Ct);
+
+        response.EnsureSuccessStatusCode();
+        var approved = await Deserialize<ArtifactDto>(response);
+        Assert.Equal("pm-only@test.com", approved.ApprovedBy);
+    }
+
+    [Fact]
+    public async Task Approve_RecordsAuthenticatedIdentityOnThePipelineEvent()
+    {
+        var project = await CreateProject("AuditApprover", "org/audit-approver");
+        var feature = await CreateFeature(project.Id, "Audit trail approver");
+        var prd = await GeneratePrdAndGetArtifact(feature.Id);
+
+        var pmOnly = _factory.CreateClientWithToken(ZephyrusApiFactory.PmOnlyToken);
+        await pmOnly.PostAsync($"/api/features/{feature.Id}/artifacts/{prd.Id}/approve", null, Ct);
+
+        var events = await Deserialize<PipelineEventDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/pipeline-events", Ct));
+
+        Assert.Contains(events, e => e.TriggeredBy == "pm-only@test.com");
+    }
+
+    [Fact]
+    public async Task Me_WhenAuthenticated_ReturnsIdentityAndRoles()
+    {
+        var response = await _client.GetAsync("/api/me", Ct);
+        response.EnsureSuccessStatusCode();
+
+        var me = await Deserialize<CurrentUserDto>(response);
+        Assert.Equal("pm@test.com", me.Email);
+        Assert.Contains("PmEm", me.Roles);
+        Assert.Contains("TechLead", me.Roles);
+        Assert.Contains("Qa", me.Roles);
+    }
+
+    [Fact]
+    public async Task Me_WhenAnonymous_Returns401()
+    {
+        var anonymous = _factory.CreateClientWithToken(null);
+
+        var response = await anonymous.GetAsync("/api/me", Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ──────────────────────────────────────────────
+    // Authentication by default
+    // ──────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("GET", "/api/projects")]
+    [InlineData("POST", "/api/projects")]
+    [InlineData("GET", "/api/projects/00000000-0000-0000-0000-000000000001")]
+    [InlineData("DELETE", "/api/projects/00000000-0000-0000-0000-000000000001")]
+    [InlineData("POST", "/api/features")]
+    [InlineData("GET", "/api/features/00000000-0000-0000-0000-000000000001")]
+    [InlineData("POST", "/api/features/00000000-0000-0000-0000-000000000001/generate-prd")]
+    [InlineData("POST", "/api/features/00000000-0000-0000-0000-000000000001/rerun-step")]
+    [InlineData("GET", "/api/features/00000000-0000-0000-0000-000000000001/agent-invocations")]
+    [InlineData("DELETE", "/api/features/00000000-0000-0000-0000-000000000001")]
+    [InlineData("GET", "/api/features/00000000-0000-0000-0000-000000000001/artifacts")]
+    [InlineData("PUT", "/api/features/00000000-0000-0000-0000-000000000001/artifacts/00000000-0000-0000-0000-000000000002/content")]
+    [InlineData("DELETE", "/api/features/00000000-0000-0000-0000-000000000001/artifacts/00000000-0000-0000-0000-000000000002")]
+    public async Task Endpoint_WhenCallerIsAnonymous_ShouldReturn401(string method, string path)
+    {
+        var anonymous = _factory.CreateClientWithToken(null);
+        var request = new HttpRequestMessage(new HttpMethod(method), path)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+        };
+
+        var response = await anonymous.SendAsync(request, Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Endpoint_WhenTokenIsUnknown_ShouldReturn401()
+    {
+        var stranger = _factory.CreateClientWithToken("not-a-team-token");
+
+        var response = await stranger.GetAsync("/api/projects", Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateProject_WhenCallerIsAnonymous_ShouldNotPersistProject()
+    {
+        var anonymous = _factory.CreateClientWithToken(null);
+
+        await anonymous.PostAsJsonAsync("/api/projects", new
+        {
+            name = "AnonCreated",
+            description = "Should never be stored",
+            config = "project:\n  name: anon",
+            repositorySlug = "org/anon-created",
+            gitHubToken = "ghp_anonymousShouldNotBeStored",
+        }, cancellationToken: Ct);
+
+        var projects = await Deserialize<ProjectDto[]>(await _client.GetAsync("/api/projects", Ct));
+        Assert.DoesNotContain(projects, p => p.Name == "AnonCreated");
+    }
+
+    [Fact]
+    public async Task Webhook_WhenSignedAndCallerHasNoTeamToken_ShouldBeAccepted()
+    {
+        // GitHub never sends a team token — the signature alone authenticates it.
+        var anonymous = _factory.CreateClientWithToken(null);
+
+        var response = await SendWebhook("pull_request", """
+            {
+              "action": "closed",
+              "repository": { "full_name": "someone-else/anon-webhook" },
+              "pull_request": { "number": 1, "merged": true, "merge_commit_sha": "abc123" }
+            }
+            """, anonymous);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AnyRequest_WhenServed_ShouldCarrySecurityHeaders()
+    {
+        var response = await _client.GetAsync("/api/me", Ct);
+
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
+    }
+
+    // ──────────────────────────────────────────────
+    // Webhooks
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Webhook_WhenSignatureIsMissing_Returns401()
+    {
+        var response = await _client.PostAsync(
+            "/api/webhooks/github",
+            new StringContent("""{"repository":{"full_name":"org/x"}}""", Encoding.UTF8, "application/json"), Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenSignatureIsWrong_Returns401()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/github")
+        {
+            Content = new StringContent(
+                """{"repository":{"full_name":"org/x"}}""", Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("X-GitHub-Event", "pull_request");
+        request.Headers.Add("X-Hub-Signature-256", "sha256=not-the-real-signature");
+
+        var response = await _client.SendAsync(request, Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenPayloadIsNotJson_ShouldReturn400()
+    {
+        var response = await SendSignedWebhook("pull_request", "not json");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("not valid JSON", await response.Content.ReadAsStringAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Webhook_WhenPayloadHasNoRepository_ShouldReturn400()
+    {
+        var response = await SendSignedWebhook("pull_request", """{"action":"closed"}""");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("no repository", await response.Content.ReadAsStringAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Webhook_WhenEventTypeIsNotUsed_ShouldBeAcknowledged()
+    {
+        var response = await SendSignedWebhook("issues", """{"repository":{"full_name":"org/x"}}""");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenRepositoryIsUnknown_IsAcknowledgedWithoutEffect()
+    {
+        var response = await SendWebhook("pull_request", """
+            {
+              "action": "closed",
+              "repository": { "full_name": "someone-else/not-ours" },
+              "pull_request": { "number": 1, "merged": true, "merge_commit_sha": "abc123" }
+            }
+            """);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenDeploymentFails_RecordsFailureAndDoesNotDeployTheFeature()
+    {
+        var project = await CreateProject("FailedDeploy", "org/failed-deploy");
+        var feature = await CreateFeature(project.Id, "Deployment that fails");
+        await RunPipelineToQaApproved(feature.Id);
+
+        var tasks = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct));
+        const string sha = "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c";
+
+        await SendWebhook("pull_request", $$"""
+            {
+              "action": "closed",
+              "repository": { "full_name": "org/failed-deploy" },
+              "pull_request": {
+                "number": {{tasks[0].PrId}},
+                "merged": true,
+                "merge_commit_sha": "{{sha}}"
+              }
+            }
+            """);
+
+        await SendWebhook("deployment_status", $$"""
+            {
+              "repository": { "full_name": "org/failed-deploy" },
+              "deployment": { "sha": "{{sha}}", "environment": "production" },
+              "deployment_status": { "state": "failure" }
+            }
+            """);
+
+        await AssertFeatureStatus(feature.Id, "QaApproved");
+
+        var deployments = await Deserialize<DeploymentDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/deployments", Ct));
+        Assert.Equal("Failed", Assert.Single(deployments).Status);
+    }
+
+    [Fact]
+    public async Task Webhook_WhenPullRequestMerges_MarksItsTaskDone()
+    {
+        var project = await CreateProject("MergeMarksDone", "org/merge-marks-done");
+        var feature = await CreateFeature(project.Id, "Merging completes the task");
+        await RunPipelineToQaApproved(feature.Id);
+
+        var tasks = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct));
+        var merging = tasks[0];
+
+        await SendWebhook("pull_request", $$"""
+            {
+              "action": "closed",
+              "repository": { "full_name": "org/merge-marks-done" },
+              "pull_request": {
+                "number": {{merging.PrId}},
+                "merged": true,
+                "merge_commit_sha": "5c4b3a29180f7e6d5c4b3a29180f7e6d5c4b3a29"
+              }
+            }
+            """);
+
+        var after = await Deserialize<TaskItemDto[]>(
+            await _client.GetAsync($"/api/features/{feature.Id}/tasks", Ct));
+
+        Assert.Equal("Done", after.Single(t => t.Id == merging.Id).Status);
+    }
+
+    /// <summary>Drives a feature from Ideation to QaApproved through the API.</summary>
+    private async Task RunPipelineToQaApproved(Guid featureId)
+    {
+        var prd = await GeneratePrdAndGetArtifact(featureId);
+        await ApproveArtifact(featureId, prd.Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Adr")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Task")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Pr")).Id);
+        await ApproveArtifact(featureId, (await GetArtifactByType(featureId, "Test")).Id);
+    }
+
+    // ──────────────────────────────────────────────
+    // Secret protection
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task ProjectToken_IsNotStoredInPlaintext()
+    {
+        const string token = "ghp_plaintextShouldNeverReachTheDatabase";
+        var project = await CreateProjectWithToken("TokenAtRest", "org/token-at-rest", token);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ZephyrusDbContext>();
+        var stored = await db.Database
+            .SqlQueryRaw<string>("SELECT github_token AS Value FROM projects")
+            .ToListAsync(cancellationToken: Ct);
+
+        Assert.DoesNotContain(token, stored);
+        Assert.All(stored, value => Assert.StartsWith("enc:v1:", value));
+        Assert.NotEmpty(stored);
+        Assert.NotEqual(Guid.Empty, project.Id);
+    }
+
+    [Fact]
+    public async Task ProjectToken_IsDecryptedWhenTheProjectIsLoaded()
+    {
+        const string token = "ghp_roundTripsBackOutOfTheDatabase";
+        var project = await CreateProjectWithToken("TokenRoundTrip", "org/token-round-trip", token);
+
+        using var scope = _factory.Services.CreateScope();
+        var projects = scope.ServiceProvider.GetRequiredService<IProjectRepository>();
+        var loaded = await projects.GetByIdAsync(project.Id, Ct);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(token, loaded!.GitHubToken);
+    }
+
+    [Fact]
+    public async Task ProjectToken_ReachesTheCodeHostAsPlaintext()
+    {
+        // The encryption is invisible above the repository: agents still get a
+        // usable token.
+        const string token = "ghp_mustArriveUsableAtTheCodeHost";
+        var project = await CreateProjectWithToken("TokenToCodeHost", "org/token-to-code-host", token);
+        var feature = await CreateFeature(project.Id, "Token reaches the code host");
+
+        await GeneratePrdAndGetArtifact(feature.Id);
+
+        Assert.Equal(token, _factory.FakeCodeHostFactory.LastToken);
+    }
+
+    private async Task<ProjectDto> CreateProjectWithToken(string name, string repoSlug, string token)
+    {
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            name,
+            description = $"Project {name}",
+            config = $"project:\n  name: {name.ToLower()}",
+            repositorySlug = repoSlug,
+            gitHubToken = token
+        });
+        response.EnsureSuccessStatusCode();
+        return await Deserialize<ProjectDto>(response);
+    }
+
+    private async Task<HttpResponseMessage> SendWebhook(string eventName, string json, HttpClient? client = null)
+    {
+        var response = await SendSignedWebhook(eventName, json, client);
+        response.EnsureSuccessStatusCode();
+        return response;
+    }
+
+    private async Task<HttpResponseMessage> SendSignedWebhook(string eventName, string json, HttpClient? client = null)
+    {
+        var body = Encoding.UTF8.GetBytes(json);
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(ZephyrusApiFactory.WebhookSecret));
+        var signature = "sha256=" + Convert.ToHexString(hmac.ComputeHash(body)).ToLowerInvariant();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/github")
+        {
+            Content = new ByteArrayContent(body),
+        };
+        request.Content.Headers.Add("Content-Type", "application/json");
+        request.Headers.Add("X-GitHub-Event", eventName);
+        request.Headers.Add("X-Hub-Signature-256", signature);
+
+        return await (client ?? _client).SendAsync(request, Ct);
+    }
+
+    private async Task<ProjectDto> CreateProject(string name, string repoSlug)
+    {
+        var response = await _client.PostAsJsonAsync("/api/projects", new
+        {
+            name,
+            description = $"Project {name}",
+            config = $"project:\n  name: {name.ToLower()}",
+            repositorySlug = repoSlug,
+            gitHubToken = "fake-token"
+        });
+        response.EnsureSuccessStatusCode();
+        return await Deserialize<ProjectDto>(response);
+    }
+
+    private async Task<FeatureDto> CreateFeature(Guid projectId, string prompt)
+    {
+        var response = await _client.PostAsJsonAsync("/api/features", new { projectId, prompt });
+        response.EnsureSuccessStatusCode();
+        return await Deserialize<FeatureDto>(response);
+    }
+
+    /// <summary>
+    /// Queues the PRD Agent. The test server runs jobs inline, so the PRD
+    /// exists once the request returns.
+    /// </summary>
+    private async Task<ArtifactDto> GeneratePrdAndGetArtifact(Guid featureId)
+    {
+        var response = await _client.PostAsync($"/api/features/{featureId}/generate-prd", null);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var artifacts = await Deserialize<ArtifactDto[]>(await _client.GetAsync($"/api/features/{featureId}/artifacts"));
+        return artifacts.Single(a => a.Type == "Prd");
+    }
+
+    private async Task ApproveArtifact(Guid featureId, Guid artifactId)
+    {
+        var response = await _client.PostAsync($"/api/features/{featureId}/artifacts/{artifactId}/approve", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private async Task<ArtifactDto> GetArtifactByType(Guid featureId, string type)
+    {
+        var response = await _client.GetAsync($"/api/features/{featureId}/artifacts");
+        response.EnsureSuccessStatusCode();
+        var artifacts = await Deserialize<ArtifactDto[]>(response);
+        return artifacts.Single(a => a.Type == type);
+    }
+
+    private async Task AssertFeatureStatus(Guid featureId, string expectedStatus)
+    {
+        var response = await _client.GetAsync($"/api/features/{featureId}");
+        response.EnsureSuccessStatusCode();
+        var feature = await Deserialize<FeatureDto>(response);
+        Assert.Equal(expectedStatus, feature.Status);
+    }
+
+    private static async Task<T> Deserialize<T>(HttpResponseMessage response)
+    {
+        var json = await response.Content.ReadAsStringAsync();
+        return JsonSerializer.Deserialize<T>(json, JsonOptions)!;
+    }
+
+    // DTOs for deserialization
+    private record ProjectDto(Guid Id, string Name, string Description, string RepositorySlug, DateTime CreatedAt);
+    private record FeatureDto(Guid Id, Guid ProjectId, string Prompt, string Status, DateTime CreatedAt);
+    private record ArtifactDto(Guid Id, Guid FeatureId, string Type, string RepositoryPath, string? ApprovedBy, DateTime? ApprovedAt);
+    private record CurrentUserDto(string Email, string DisplayName, string[] Roles);
+    private record DeploymentDto(Guid Id, Guid FeatureId, string Sha, string Environment, string Status, DateTime DeployedAt);
+    private record TaskItemDto(Guid Id, Guid FeatureId, string Title, string Status, string AgentType, int? ExternalIssueId, int? PrId);
+    private record ContentDto(string Content);
+    private record PipelineEventDto(Guid Id, Guid FeatureId, string FromStatus, string ToStatus, string TriggeredBy, DateTime Timestamp);
+    private record DeletionPreviewDto(string EntityTitle, int ChildrenCount, string[] Warnings);
+    private record DeletedDto(int DeletedEntitiesCount);
+}

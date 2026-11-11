@@ -1,0 +1,93 @@
+using Xunit;
+using Zephyrus.Core.Agents;
+using Zephyrus.Infrastructure.AI.Agents;
+
+namespace Zephyrus.UnitTests.Agents;
+
+public class ArchitectAgentTests
+{
+    private const string SystemPrompt = "You are the Architect Agent";
+    private const string AdrMarkdown = "# ADR: Test Feature\n\n## Summary\nTest architecture.";
+
+    private static (ArchitectAgent Agent, FakeLanguageModel LLM, FakePromptLoader Loader) CreateAgent()
+    {
+        var llm = new FakeLanguageModel(AdrMarkdown);
+        var loader = new FakePromptLoader(SystemPrompt);
+        var agent = new ArchitectAgent(llm, loader);
+        return (agent, llm, loader);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCalled_ShouldLoadArchitectSystemPrompt()
+    {
+        var (agent, _, loader) = CreateAgent();
+
+        await agent.RunAsync(BuildInput(), Ct);
+
+        Assert.Equal("architect", loader.LastLoadedName);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCalled_ShouldPassApprovedPrdInUserMessage()
+    {
+        var (agent, llm, _) = CreateAgent();
+        var input = BuildInput();
+
+        await agent.RunAsync(input, Ct);
+
+        Assert.Contains(input.ApprovedPrd, llm.LastUserMessage);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCalled_ShouldPassProjectConstitutionInUserMessage()
+    {
+        var (agent, llm, _) = CreateAgent();
+        var input = BuildInput();
+
+        await agent.RunAsync(input, Ct);
+
+        Assert.Contains(input.ProjectConstitution, llm.LastUserMessage);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCalled_ShouldReturnLlmOutputAsMarkdown()
+    {
+        var (agent, _, _) = CreateAgent();
+
+        var output = await agent.RunAsync(BuildInput(), Ct);
+
+        Assert.Equal(AdrMarkdown, output.Markdown);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCodebaseMapProvided_ShouldIncludeItInUserMessage()
+    {
+        var (agent, llm, _) = CreateAgent();
+        var input = BuildInput(codebaseMap: "# Codebase\n- src/Api/Controllers/");
+
+        await agent.RunAsync(input, Ct);
+
+        Assert.Contains("## Codebase Map", llm.LastUserMessage);
+        Assert.Contains("src/Api/Controllers/", llm.LastUserMessage);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCodebaseMapIsNull_ShouldNotIncludeCodebaseSection()
+    {
+        var (agent, llm, _) = CreateAgent();
+        var input = BuildInput(codebaseMap: null);
+
+        await agent.RunAsync(input, Ct);
+
+        Assert.DoesNotContain("## Codebase Map", llm.LastUserMessage);
+    }
+
+    private static ArchitectAgentInput BuildInput(string featureSlug = "test-feature", string? codebaseMap = null) =>
+        new()
+        {
+            ApprovedPrd = "# PRD: Test Feature",
+            ProjectConstitution = "project:\n  name: test-app",
+            FeatureSlug = featureSlug,
+            CodebaseMap = codebaseMap
+        };
+}
