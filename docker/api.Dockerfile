@@ -18,7 +18,7 @@ COPY src/Zephyrus.Api/ src/Zephyrus.Api/
 COPY prompts/ prompts/
 RUN dotnet publish src/Zephyrus.Api/Zephyrus.Api.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 WORKDIR /app
 COPY --from=build /app .
 
