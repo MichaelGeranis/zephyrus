@@ -17,7 +17,7 @@ export function AgentJobList({ jobs }: { jobs: AgentJob[] }) {
   const ordered = [...jobs].reverse();
 
   return (
-    <>
+    <section aria-label="Agent Jobs">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Agent Jobs</h2>
       <div className="grid gap-2 mb-6">
         {ordered.map((job) => {
@@ -49,6 +49,6 @@ export function AgentJobList({ jobs }: { jobs: AgentJob[] }) {
           );
         })}
       </div>
-    </>
+    </section>
   );
 }

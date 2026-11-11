@@ -49,6 +49,7 @@ describe("AgentJobList", () => {
       />,
     );
 
+    expect(screen.getByRole("region", { name: "Agent Jobs" })).toBeInTheDocument();
     const names = screen.getAllByText(/ Agent$/).map((e) => e.textContent);
     expect(names).toEqual(["Task Agent", "Architect Agent"]);
     expect(screen.getByText("Running")).toBeInTheDocument();
