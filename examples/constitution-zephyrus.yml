@@ -3,19 +3,19 @@ project:
   description: "AI-powered software delivery platform that orchestrates the journey from idea to production through specialized AI agents with human validation at every gate."
 
 stack:
-  frontend: "Next.js 15 + TypeScript"
-  backend: "ASP.NET Core 8 + C#"
-  database: "PostgreSQL 15"
-  orm: "Entity Framework Core 8"
+  frontend: "Next.js 16 + TypeScript"
+  backend: "ASP.NET Core 11 + C#"
+  database: "PostgreSQL 18"
+  orm: "Entity Framework Core 10"
   css: "Tailwind CSS 4"
-  ai: "Claude API (claude-sonnet-4-20250514)"
-  github: "Octokit.net 13"
-  testing: "xUnit 2.9 + SQLite in-memory"
+  ai: "Local models through an OpenAI-compatible API (Ollama), falling back to the Claude API (claude-opus-5-5)"
+  github: "Octokit.net 14, through a GitHub App or per-project tokens"
+  testing: "xUnit v3 + SQLite in-memory, Vitest, Playwright"
 
 conventions:
   architecture: "Clean Architecture (4 layers: Core, Application, Infrastructure, Api)"
   linting: "dotnet format (backend), ESLint + Prettier (frontend)"
-  testing: "xUnit (backend), Jest (frontend)"
+  testing: "xUnit (backend), Vitest + Testing Library (frontend components), Playwright (end to end)"
   branch_strategy: "feature branches → main (squash merge)"
   commit_style: "conventional commits (feat, fix, docs, refactor, test, chore)"
   pr_template: true
@@ -29,7 +29,7 @@ architecture:
     - "Use case pattern for orchestration (one class per business operation)"
     - "Stateless agents — all state in DB and GitHub"
   api_style: "REST + JSON"
-  auth: "none (pre-alpha)"
+  auth: "Team tokens (bearer), stored as SHA-256 hashes; approvals checked against the approver's role"
   layers:
     core: "Entities, interfaces, enums, state machine, agent input/output records — zero NuGet packages"
     application: "Use cases, managers, orchestrator — depends only on Core"
@@ -38,9 +38,14 @@ architecture:
     web: "Next.js presentation — no business logic, renders API responses only"
 
 deployment:
-  target: "Railway"
-  trigger: "merge to main"
+  target: "Docker Compose, with images published to GitHub Container Registry"
+  trigger: "version tag (v*) runs the release workflow"
   environment_variables:
-    - DATABASE_URL
+    - POSTGRES_PASSWORD
     - CLAUDE_API_KEY
-    - GITHUB_TOKEN
+    - GITHUB_WEBHOOK_SECRET
+    - GITHUB_APP_ID
+    - GITHUB_APP_PRIVATE_KEY
+    - PM_TOKEN
+    - TECH_LEAD_TOKEN
+    - QA_TOKEN
