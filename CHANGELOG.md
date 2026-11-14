@@ -11,6 +11,14 @@ under **Changed**.
 
 ### Added
 
+- Agent run content (what each run read and wrote) is encrypted in the
+  database with the same Data Protection keys as project tokens. Runs stored
+  earlier are encrypted shortly after the API starts.
+- `AgentRuns:ContentRetentionDays` removes a run's input and output after that
+  many days, keeping its record (model, prompt version, tokens, cost). Off by
+  default.
+- `Team:Members:N:TokenHash`: configure a member by the SHA-256 of their token
+  instead of the token itself. A plaintext `Token` still works, with a warning.
 - [Production guide](docs/production.md): TLS through a reverse proxy, health
   checks, backups of the database and the key ring, and upgrades.
 - Health endpoints: `/health` (liveness) and `/health/ready` (the database is
@@ -26,6 +34,10 @@ under **Changed**.
 
 ### Changed
 
+- The web UI keeps the team token for the browser session only, instead of
+  in local storage indefinitely; a stored token is moved over once.
+- The `@claude` workflow no longer asks for an OIDC token and does not leave its
+  write token in the checkout.
 - A GitHub webhook delivery that is not valid JSON is answered with 400 instead
   of 500.
 - The web UI renders every page per request (needed for the CSP nonce).

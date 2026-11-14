@@ -212,6 +212,8 @@ AgentInvocation (usage columns)
   estimated_cost_usd decimal     ← null when the model has no price
   prompt_version  string         ← first 12 hex of SHA-256 of the system prompt
   artifact_id     UUID           ← artifact the run produced (no FK: kept after a re-run replaces it)
+  user_message, response  text   ← encrypted (enc:v1:); a fixed marker once removed
+  content_removed_at timestamp   ← when the retention period removed them, else null
 
 AgentJobRecord
   id              UUID, PK
@@ -302,7 +304,23 @@ database rather than stored as written.
 - **The key ring is operational state.** Set `DataProtection:KeyPath` to a
   durable, backed-up directory. The default location lives under the host user
   profile and is lost when a container is replaced — and losing the keys means
-  every stored token must be re-entered.
+  every stored token must be re-entered, and stored agent run content is lost.
+
+**Agent run content** is protected the same way. `AgentInvocation.UserMessage`
+and `Response` hold what each run read and wrote: the constitution, artifacts,
+issue bodies and code. Both columns go through the same value conversion; the
+system prompt is the agent's prompt file, not project content, and stays plain
+so prompt versions remain inspectable.
+
+- `AgentRunContentMaintenance` (Infrastructure/Persistence), run by
+  `AgentRunContentMaintenanceService` 30 seconds after startup and then daily:
+  - encrypts runs stored before this existed, found by their stored form (a LINQ
+    comparison would compare against a fresh ciphertext), in batches of 100;
+  - with `AgentRuns:ContentRetentionDays` set, calls `AgentInvocation.RemoveContent`
+    on runs older than that: the message and response become a fixed marker and
+    `content_removed_at` is set. The run's record (agent, model, prompt version,
+    tokens, cost, artifact) stays, so the audit trail still says what ran.
+- A failed pass is logged and tried again the next day; it never stops the API.
 
 ### Demo mode
 
@@ -393,7 +411,15 @@ roster and issues a principal carrying the member's role claims.
 - The roster lives in configuration (`Team:Members`), not the database —
   Zephyrus targets a small fixed team. Moving it to a `TeamMember` entity is a
   contained change behind the same `IUserContext`.
-- Tokens are compared with `CryptographicOperations.FixedTimeEquals`.
+- A member is configured with `TokenHash`, the SHA-256 of their token, or with
+  the `Token` itself. With a hash, the API hashes the presented token and
+  compares; reading the configuration gives no usable token. A plaintext `Token`
+  still works, with a startup warning outside demo mode, and a malformed hash
+  stops startup. Both are compared with `CryptographicOperations.FixedTimeEquals`
+  (`TeamMemberOptions.Matches`).
+- The web UI keeps the token in the tab's session storage: it survives reloads,
+  not closing the browser. A token an earlier version left in local storage is
+  moved into the session once and deleted.
 - A member with an empty configured token can never authenticate, so the shipped
   defaults deny everyone until real tokens are supplied.
 - **Authentication is required by default.** A fallback authorization policy

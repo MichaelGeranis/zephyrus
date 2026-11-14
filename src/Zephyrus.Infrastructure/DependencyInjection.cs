@@ -63,6 +63,12 @@ public static class DependencyInjection
         services.AddScoped<IJobQueue, DurableJobQueue>();
         services.AddHostedService<AgentJobWorker>();
 
+        // Agent run content: encrypt runs stored before it was encrypted, and remove
+        // content past AgentRuns:ContentRetentionDays. Daily, off the request path.
+        services.Configure<AgentRunContentOptions>(configuration.GetSection(AgentRunContentOptions.SectionName));
+        services.AddScoped<AgentRunContentMaintenance>();
+        services.AddHostedService<AgentRunContentMaintenanceService>();
+
         // Code host and language model: GitHub and Claude, or local stand-ins
         // in demo mode so the app runs without any API keys.
         var demo = configuration.GetSection(DemoOptions.SectionName).Get<DemoOptions>() ?? new DemoOptions();

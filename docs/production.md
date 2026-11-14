@@ -47,7 +47,8 @@ Set these on the API container. Generate every token and password with
 | `Demo__Enabled` | `false` |
 | `ConnectionStrings__DefaultConnection` | `Host=db;Database=zephyrus;Username=zephyrus;Password=<db password>` |
 | `Database__MigrateOnStartup` | `true` to apply migrations when the API starts, or run them yourself before upgrading |
-| `Team__Members__N__Email` / `__DisplayName` / `__Token` / `__Roles__0` | one entry per team member; the API refuses to start with a `demo-` token |
+| `Team__Members__N__Email` / `__DisplayName` / `__TokenHash` / `__Roles__0` | one entry per team member. `TokenHash` is the SHA-256 of the token (`printf %s "$TOKEN" \| sha256sum`), so the configuration holds no token anyone could sign in with; give each member their token directly. `__Token` (the token as written) still works, with a startup warning |
+| `AgentRuns__ContentRetentionDays` | how long agent runs keep what they read and wrote (the constitution, artifacts, issue bodies, code), for example `365`. The run's record stays. `0`, the default, keeps them |
 | `Cors__AllowedOrigins__0` | `https://zephyrus.example.com` |
 | `DataProtection__KeyPath` | `/data/keys` (the image's default), on a volume you back up |
 | `GitHub__Webhook__Secret` | the secret you set on the GitHub webhook |

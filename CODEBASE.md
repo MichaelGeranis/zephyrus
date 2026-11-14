@@ -114,6 +114,7 @@ src/
 │   │   └── FilePromptLoader.cs             — Loads prompts from prompts/ directory
 │   ├── Jobs/
 │   │   ├── AgentJobWorker.cs               — BackgroundService draining the queue, one DI scope per job
+│   │   ├── AgentRunContentMaintenanceService.cs — Daily: encrypts old agent run content, applies its retention period
 │   │   ├── BackgroundJobQueue.cs           — In-process IJobQueue backed by a channel
 │   │   └── InlineJobQueue.cs               — Runs jobs inline (tests only)
 │   ├── Security/
@@ -122,6 +123,7 @@ src/
 │   │   ├── GitHubCodeHost.cs               — ICodeHost implementation (Octokit.net)
 │   │   └── GitHubCodeHostFactory.cs        — Creates GitHubCodeHost per project token
 │   └── Persistence/
+│       ├── AgentRunContentMaintenance.cs   — Encrypts runs stored as written; removes content past AgentRuns:ContentRetentionDays
 │       ├── Configurations/                 — EF Core entity type configurations
 │       │   ├── AgentInvocationConfiguration.cs
 │       │   ├── ArtifactConfiguration.cs
@@ -190,10 +192,12 @@ tests/
 │   │   ├── QaAgentTests.cs
 │   │   └── TaskAgentTests.cs
 │   ├── ExceptionHandlingMiddlewareTests.cs
+│   ├── TeamMemberTokenTests.cs             — Token and TokenHash matching; removing a run's content
 │   ├── PipelineStateMachineTests.cs
 │   ├── RetryArtifactCommitUseCaseTests.cs
 │   └── SlugGenerationTests.cs
 └── Zephyrus.IntegrationTests/
+    ├── AgentRunContentIntegrationTests.cs  — Run content encrypted at rest, old rows encrypted, retention, sign-in by hash
     ├── ApiIntegrationTests.cs              — HTTP endpoint tests
     ├── PipelineIntegrationTests.cs         — Full pipeline flow tests
     ├── PipelineFixture.cs                  — Shared test fixture

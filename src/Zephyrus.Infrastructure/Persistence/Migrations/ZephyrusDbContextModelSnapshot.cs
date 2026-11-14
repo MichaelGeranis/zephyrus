@@ -17,7 +17,7 @@ namespace Zephyrus.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -38,6 +38,10 @@ namespace Zephyrus.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ArtifactId")
                         .HasColumnType("uuid")
                         .HasColumnName("artifact_id");
+
+                    b.Property<DateTime?>("ContentRemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("content_removed_at");
 
                     b.Property<int>("DurationMs")
                         .HasColumnType("integer")

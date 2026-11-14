@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Zephyrus.Api.Authentication;
 
 /// <summary>
@@ -25,10 +28,46 @@ public sealed class TeamMemberOptions
     public string DisplayName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Bearer token presented by this member. Supply via configuration or an
-    /// environment variable — never commit a real one.
+    /// Bearer token presented by this member, as written. Supply via configuration
+    /// or an environment variable — never commit a real one. Prefer
+    /// <see cref="TokenHash"/>, so the configuration never holds a usable token.
     /// </summary>
     public string Token { get; set; } = string.Empty;
+
+    /// <summary>
+    /// SHA-256 of the member's token, as 64 hexadecimal characters
+    /// (<c>printf %s "$TOKEN" | sha256sum</c>). When set, it is used instead of
+    /// <see cref="Token"/>: someone who reads the configuration cannot sign in with it.
+    /// </summary>
+    public string TokenHash { get; set; } = string.Empty;
+
+    /// <summary>True when the member is configured with a hash rather than the token itself.</summary>
+    public bool UsesTokenHash => !string.IsNullOrEmpty(TokenHash);
+
+    /// <summary>True when <see cref="TokenHash"/> is empty or 64 hexadecimal characters.</summary>
+    public bool HasValidTokenHash => !UsesTokenHash || (TokenHash.Length == 64 && TokenHash.All(Uri.IsHexDigit));
+
+    /// <summary>
+    /// Whether <paramref name="presented"/> is this member's token. Compares in
+    /// constant time so it cannot be recovered by timing; a member with neither a
+    /// token nor a hash never matches.
+    /// </summary>
+    public bool Matches(string presented)
+    {
+        if (UsesTokenHash)
+        {
+            if (!HasValidTokenHash)
+                return false;
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(presented));
+            return CryptographicOperations.FixedTimeEquals(hash, Convert.FromHexString(TokenHash));
+        }
+
+        if (string.IsNullOrEmpty(Token))
+            return false;
+
+        // Differing lengths short-circuit, which only leaks the length
+        return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(Token), Encoding.UTF8.GetBytes(presented));
+    }
 
     /// <summary>Role names, parsed against <c>TeamRole</c>.</summary>
     public List<string> Roles { get; set; } = new();
