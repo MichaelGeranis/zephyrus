@@ -28,6 +28,9 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
     /// <summary>Token for a member holding only QA.</summary>
     public const string QaOnlyToken = "test-qa";
 
+    /// <summary>Token for a PM/EM member configured with its SHA-256 (TokenHash) instead.</summary>
+    public const string HashedToken = "test-hashed";
+
     /// <summary>Webhook secret the tests sign their deliveries with.</summary>
     public const string WebhookSecret = "test-webhook-secret";
 
@@ -77,6 +80,12 @@ public sealed class ZephyrusApiFactory : WebApplicationFactory<Program>
                 ["Team:Members:2:DisplayName"] = "QA Only",
                 ["Team:Members:2:Token"] = QaOnlyToken,
                 ["Team:Members:2:Roles:0"] = "Qa",
+
+                // Configured by hash only: the token itself appears nowhere in the configuration
+                ["Team:Members:3:Email"] = "hashed@test.com",
+                ["Team:Members:3:DisplayName"] = "Hashed Token",
+                ["Team:Members:3:TokenHash"] = "26a869aeed9e9c463ca4365acaf3b28de53b1ac7ec70c2ae40cee46b1ab083f5",
+                ["Team:Members:3:Roles:0"] = "PmEm",
             });
         });
 

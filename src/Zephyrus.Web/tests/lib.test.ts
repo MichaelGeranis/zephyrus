@@ -34,6 +34,20 @@ describe("team token storage", () => {
     expect(getTeamToken()).toBeNull();
   });
 
+  it("keeps the token for this session only, never in local storage", () => {
+    setTeamToken("secret");
+    expect(window.sessionStorage.getItem("zephyrus.teamToken")).toBe("secret");
+    expect(window.localStorage.getItem("zephyrus.teamToken")).toBeNull();
+  });
+
+  it("moves a token left in local storage by an earlier version into the session", () => {
+    window.localStorage.setItem("zephyrus.teamToken", "legacy");
+
+    expect(getTeamToken()).toBe("legacy");
+    expect(window.localStorage.getItem("zephyrus.teamToken")).toBeNull();
+    expect(window.sessionStorage.getItem("zephyrus.teamToken")).toBe("legacy");
+  });
+
   it("returns null when storage is unavailable", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");

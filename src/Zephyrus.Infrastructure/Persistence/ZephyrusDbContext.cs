@@ -39,5 +39,19 @@ public class ZephyrusDbContext : DbContext
             .HasConversion(
                 token => _secretProtector.Protect(token),
                 stored => _secretProtector.Unprotect(stored));
+
+        // An agent run's input and output hold the project's constitution, its
+        // artifacts, issue bodies and code: encrypted the same way. Rows stored
+        // before this are encrypted by AgentRunContentMaintenance.
+        modelBuilder.Entity<AgentInvocation>()
+            .Property(i => i.UserMessage)
+            .HasConversion(
+                text => _secretProtector.Protect(text),
+                stored => _secretProtector.Unprotect(stored));
+        modelBuilder.Entity<AgentInvocation>()
+            .Property(i => i.Response)
+            .HasConversion(
+                text => _secretProtector.Protect(text),
+                stored => _secretProtector.Unprotect(stored));
     }
 }

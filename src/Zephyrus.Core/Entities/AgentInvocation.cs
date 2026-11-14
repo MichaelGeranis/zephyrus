@@ -39,6 +39,13 @@ public class AgentInvocation
     /// </summary>
     public Guid? ArtifactId { get; private set; }
 
+    /// <summary>
+    /// When the run's input and output were removed under the content retention
+    /// period, or null while they are kept. The run itself stays: who ran what,
+    /// with which model and prompt version, at what cost.
+    /// </summary>
+    public DateTime? ContentRemovedAt { get; private set; }
+
     public Feature Feature { get; private set; } = null!;
 
     private AgentInvocation() { }
@@ -65,6 +72,24 @@ public class AgentInvocation
             PromptVersion = VersionOf(systemPrompt),
             ArtifactId = artifactId
         };
+    }
+
+    /// <summary>Stands in for the user message and response once they are removed.</summary>
+    public const string RemovedContent = "[removed after the retention period]";
+
+    /// <summary>
+    /// Removes what the run read and wrote (the project's constitution, artifacts,
+    /// issue bodies and code), keeping the record of the run. The system prompt is
+    /// the agent's prompt file, not project content, so it stays.
+    /// </summary>
+    public void RemoveContent(DateTime removedAt)
+    {
+        if (ContentRemovedAt is not null)
+            return;
+
+        UserMessage = RemovedContent;
+        Response = RemovedContent;
+        ContentRemovedAt = removedAt;
     }
 
     public static string VersionOf(string systemPrompt) =>

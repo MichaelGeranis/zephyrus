@@ -46,7 +46,7 @@ public sealed class TeamTokenAuthenticationHandler : AuthenticationHandler<Authe
         if (token.Length == 0)
             return Task.FromResult(FailedSignIn("Bearer token was empty."));
 
-        var member = _team.Members.FirstOrDefault(m => TokenMatches(m.Token, token));
+        var member = _team.Members.FirstOrDefault(m => m.Matches(token));
         if (member is null)
             return Task.FromResult(FailedSignIn("Bearer token did not match any team member."));
 
@@ -71,19 +71,5 @@ public sealed class TeamTokenAuthenticationHandler : AuthenticationHandler<Authe
         _failedSignIns.RecordFailure(client);
         Logger.LogWarning("Failed sign-in from {Client}: {Reason}", client, reason);
         return AuthenticateResult.Fail(reason);
-    }
-
-    /// <summary>
-    /// Compares in constant time so a token cannot be recovered by timing the
-    /// comparison. Differing lengths short-circuit, which only leaks length.
-    /// </summary>
-    private static bool TokenMatches(string configured, string provided)
-    {
-        if (string.IsNullOrEmpty(configured))
-            return false;
-
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(configured),
-            Encoding.UTF8.GetBytes(provided));
     }
 }

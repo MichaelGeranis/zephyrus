@@ -59,6 +59,8 @@ public class AgentInvocationConfiguration : IEntityTypeConfiguration<AgentInvoca
         // record of which run produced it must outlive it.
         builder.Property(i => i.ArtifactId).HasColumnName("artifact_id");
 
+        builder.Property(i => i.ContentRemovedAt).HasColumnName("content_removed_at");
+
         builder.HasIndex(i => i.FeatureId);
     }
 }

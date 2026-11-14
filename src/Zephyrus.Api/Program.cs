@@ -27,10 +27,13 @@ builder.Services.Configure<TeamOptions>(builder.Configuration.GetSection(TeamOpt
 
 // The Docker setup ships well-known demo tokens. Refuse them outside demo mode
 // so a real deployment cannot start with credentials anyone can read.
+var configuredTeam = builder.Configuration.GetSection(TeamOptions.SectionName).Get<TeamOptions>() ?? new TeamOptions();
+if (configuredTeam.Members.FirstOrDefault(m => !m.HasValidTokenHash) is { } badHash)
+    throw new InvalidOperationException(
+        $"Team member '{badHash.Email}' has a TokenHash that is not 64 hexadecimal characters (the SHA-256 of the token).");
 if (!builder.Configuration.GetValue<bool>("Demo:Enabled"))
 {
-    var team = builder.Configuration.GetSection(TeamOptions.SectionName).Get<TeamOptions>() ?? new TeamOptions();
-    if (team.Members.Any(m => m.Token.StartsWith(TeamOptions.DemoTokenPrefix, StringComparison.OrdinalIgnoreCase)))
+    if (configuredTeam.Members.Any(m => m.Token.StartsWith(TeamOptions.DemoTokenPrefix, StringComparison.OrdinalIgnoreCase)))
         throw new InvalidOperationException(
             $"Team tokens starting with '{TeamOptions.DemoTokenPrefix}' are only allowed when Demo:Enabled is true. Set real tokens.");
 }
@@ -116,6 +119,16 @@ if (app.Configuration.GetValue<bool>("Demo:Enabled"))
     await using var scope = app.Services.CreateAsyncScope();
     if (await scope.ServiceProvider.GetRequiredService<SeedDemoDataUseCase>().ExecuteAsync())
         app.Logger.LogInformation("Demo data created.");
+}
+
+// A token written in the configuration signs in as that member for anyone who can
+// read it; a hash does not. Say so once, by member, never by token.
+if (!app.Configuration.GetValue<bool>("Demo:Enabled"))
+{
+    foreach (var member in configuredTeam.Members.Where(m => !m.UsesTokenHash && !string.IsNullOrEmpty(m.Token)))
+        app.Logger.LogWarning(
+            "Team member {Member} is configured with a plaintext Token. Configure TokenHash (the SHA-256 of the token) instead; see docs/production.md.",
+            member.Email);
 }
 
 if (app.Environment.IsDevelopment())
