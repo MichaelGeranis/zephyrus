@@ -404,13 +404,15 @@ npm run test:e2e
 | `AgentJobs__PollInterval` | How often the job worker looks for due jobs (default: `00:00:05`) |
 | `AgentJobs__Lease` | How long a worker holds a running job before another may take it over (default: `00:30:00`) |
 | `AgentJobs__RetryDelay` | Wait before retrying a failed agent job (default: `00:00:30`) |
+| `AgentRuns__ContentRetentionDays` | Days after which an agent run's input and output are removed, keeping the run's record (default: `0`, keep) |
 | `Prompts__Directory` | Folder holding the agent prompts (default: `prompts` next to the API build) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Send traces to this OTLP endpoint, e.g. `http://jaeger:4317`; unset means tracing is off |
 | `OTEL_SERVICE_NAME` | Service name on traces (default: `zephyrus-api`) |
 | `NEXT_PUBLIC_API_URL` | Backend API URL for the frontend (default: `http://localhost:5000`) |
 | `Team__Members__0__Email` | Team member identifier, recorded as the approver |
 | `Team__Members__0__DisplayName` | Team member display name |
-| `Team__Members__0__Token` | Bearer token that authenticates this member |
+| `Team__Members__0__Token` | Bearer token that authenticates this member, as written; prefer `TokenHash` |
+| `Team__Members__0__TokenHash` | SHA-256 of the member's token, as hex (`printf %s "$TOKEN" \| sha256sum`); used instead of `Token`, so the configuration holds no usable token |
 | `Team__Members__0__Roles__0` | A role held by this member: `PmEm`, `TechLead`, or `Qa` |
 | `Authentication__FailedSignIns__Limit` | Wrong team tokens one address may send before it is refused (default: `10`) |
 | `Authentication__FailedSignIns__Window` | How long those are counted, and how long a refused address waits (default: `00:15:00`) |

@@ -1,8 +1,8 @@
 namespace Zephyrus.Core.Interfaces;
 
 /// <summary>
-/// Encrypts secrets that must not be readable in the database — currently the
-/// per-project code-host token.
+/// Encrypts values that must not be readable in the database: the per-project
+/// code-host token, and what each agent run read and wrote.
 /// </summary>
 /// <remarks>
 /// Applied at the persistence boundary, so entities always hold the plaintext
